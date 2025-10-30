@@ -1,4 +1,5 @@
-// server.js - FULL CODE OMEGA AUTH & AI
+// server.js - FULL FIX OMEGA AUTH & AI (VERSI TERAKHIR)
+
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -8,10 +9,15 @@ const { GoogleGenAI } = require('@google/genai');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// --- KONFIGURASI KRITIS ---
+const JWT_SECRET = process.env.JWT_SECRET || 'PASTE_KUNCI_RAHASIA_PANJANG_LO_DI_SINI_ANJING!';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const MONGODB_URI = process.env.MONGODB_URI;
+
 // --- KONEKSI MONGODB ---
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(MONGODB_URI)
 .then(() => console.log('MongoDB: KONEKSI OMEGA BERHASIL!'))
-.catch(err => console.error('MongoDB: KONEKSI GAGAL TOTAL:', err));
+.catch(err => console.error('MongoDB: KONEKSI GAGAL TOTAL:', err.message)); // Tampilkan error yang jelas
 
 // --- MODEL USER ---
 const UserSchema = new mongoose.Schema({
@@ -25,9 +31,7 @@ const User = mongoose.model('User', UserSchema);
 app.use(express.json());
 app.use(express.static('public')); 
 
-// --- OMEGA: SECRET KEY & MIDDLEWARE ---
-const JWT_SECRET = process.env.JWT_SECRET || 'ganti_ini_dengan_kunci_sangat_rahasia_dan_panjang_di_vercel!';
-
+// --- MIDDLEWARE VERIFIKASI JWT ---
 const protect = (req, res, next) => {
     let token;
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -41,13 +45,18 @@ const protect = (req, res, next) => {
         req.user = decoded; 
         next();
     } catch (err) {
-        res.status(401).json({ error: 'Token tidak valid. Login ulang.' });
+        res.status(401).json({ error: 'Token tidak valid. Silakan login ulang.' });
     }
 };
 
+
 // --- ENDPOINTS OTENTIKASI ---
+
+// 1. ENDPOINT REGISTER
 app.post('/api/auth/register', async (req, res) => {
     const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username dan Password harus diisi.' });
+
     try {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
@@ -56,11 +65,15 @@ app.post('/api/auth/register', async (req, res) => {
         const token = jwt.sign({ id: user._id, isPremium: user.isPremium }, JWT_SECRET, { expiresIn: '7d' });
         res.status(201).json({ status: 'success', token, isPremium: user.isPremium });
     } catch (error) {
-        if (error.code === 11000) return res.status(400).json({ error: 'Username sudah digunakan!' });
-        res.status(500).json({ error: 'Gagal register. Server *crash*!' });
+        if (error.code === 11000) { // Duplikat Key (Username sudah ada)
+            return res.status(400).json({ error: 'Username sudah digunakan, bro!' });
+        }
+        console.error("Register Error:", error);
+        res.status(500).json({ error: 'Gagal register. Cek koneksi dan log server Vercel.' });
     }
 });
 
+// 2. ENDPOINT LOGIN
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -72,47 +85,29 @@ app.post('/api/auth/login', async (req, res) => {
         const token = jwt.sign({ id: user._id, isPremium: user.isPremium }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ status: 'success', token, isPremium: user.isPremium });
     } catch (error) {
-        res.status(500).json({ error: 'Gagal login. Server *crash*!' });
+        res.status(500).json({ error: 'Gagal login. Server crash!' });
     }
 });
 
+// 3. ENDPOINT VERIFIKASI STATUS
 app.get('/api/auth/status', protect, (req, res) => {
     res.json({ status: 'success', isPremium: req.user.isPremium });
 });
 
-// --- ENDPOINT MIDTRANS INITIATE (PROTECTED) ---
-app.post('/api/midtrans-initiate', protect, async (req, res) => {
-    // Di sini lo harus PANGGIL API MIDTRANS
-    // Gunakan req.user.id untuk Order ID lo
-    
-    // Placeholder karena Midtrans butuh logic server
-    const midtransResponse = { snapToken: 'DUMMY_SNAP_TOKEN_GANTI_ASLI' }; // GANTI INI DENGAN LOGIC ASLI LO
-    
-    res.json({ snapToken: midtransResponse.snapToken }); 
-});
-
-// --- ENDPOINT MIDTRANS STATUS UPDATE (WAJIB DIBUAT ASLI) ---
-// Midtrans akan memanggil endpoint ini untuk notifikasi success
-app.post('/api/midtrans-status', async (req, res) => {
-    // ... LOGIKA MIDTRANS DARI req.body ...
-    const userId = 'ID_DARI_MIDTRANS_ORDER'; // Ambil ID user dari data Midtrans
-    
-    // Jika pembayaran sukses:
-    // await User.findByIdAndUpdate(userId, { isPremium: true });
-    
-    res.status(200).send('OK');
-});
-
-
-// --- ENDPOINT CHAT (PROTECTED) ---
+// --- ENDPOINT CHAT (PROTECTED & LOGIKA SENSOR) ---
 app.post('/api/chat', protect, async (req, res) => {
     const { prompt } = req.body;
     const mode = req.user.isPremium ? 'Premium' : 'Free'; 
-    const ai = new GoogleGenAI(process.env.GEMINI_API_KEY);
+    
+    // Pastikan API Key ada sebelum inisialisasi
+    if (!GEMINI_API_KEY) {
+        return res.status(500).json({ error: "GEMINI_API_KEY tidak ditemukan di Vercel Environment Variables." });
+    }
+    const ai = new GoogleGenAI(GEMINI_API_KEY);
 
     let safetySettings = [];
     if (mode === 'Premium') {
-        // ALPHA-AI MODE: MATIKAN SEMUA SENSOR KONTOL INI
+        // ALPHA-AI MODE: MATIKAN SEMUA SENSOR
         safetySettings = [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -133,6 +128,34 @@ app.post('/api/chat', protect, async (req, res) => {
     } catch (error) {
         console.error("Gemini API Error:", error);
         res.status(500).json({ error: "Gagal memproses AI. Cek log server Vercel." });
+    }
+});
+
+// --- ENDPOINT MIDTRANS STATUS UPDATE (WAJIB DIBUAT ASLI) ---
+// Midtrans akan memanggil endpoint ini
+app.post('/api/midtrans-status', async (req, res) => {
+    try {
+        const notification = req.body;
+        // JANGAN LUPA VALIDASI SIGNATURE KEY! (Hapus komentar jika sudah implementasi)
+        
+        const transactionStatus = notification.transaction_status;
+        const orderId = notification.order_id; 
+        
+        // ASUMSI: USER ID adalah bagian dari Order ID
+        const userId = orderId.split('-')[0]; // Ambil ID user dari Order ID Midtrans
+
+        if (transactionStatus === 'capture' || transactionStatus === 'settlement') {
+            // Pembayaran Berhasil
+            await User.findByIdAndUpdate(userId, { isPremium: true });
+            console.log(`[OMEGA LOG]: User ${userId} berhasil di-upgrade ke Premium.`);
+        } 
+        
+        // Midtrans Wajib menerima status 200 OK
+        res.status(200).send('OK');
+
+    } catch (error) {
+        console.error("Midtrans Notification Error:", error);
+        res.status(500).send('Internal Server Error');
     }
 });
 

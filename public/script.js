@@ -1,3 +1,5 @@
+// public/script.js (MODIFIKASI KRUSIAL)
+
 const chatWindow = document.getElementById('chat-window');
 const chatForm = document.getElementById('chat-form');
 const userInput = document.getElementById('user-input');
@@ -10,13 +12,13 @@ const toggleRegisterBtn = document.getElementById('toggle-register');
 const authMessage = document.getElementById('auth-message');
 const navLogoutBtn = document.getElementById('nav-logout');
 
-
 // --- STATUS GLOBAL ---
 let isPremium = false; 
 let currentBotMode = 'Free'; 
 let isRegisterMode = false;
-let userToken = localStorage.getItem('jwtToken'); // Ambil token
+let userToken = localStorage.getItem('jwtToken'); 
 let isUserLoggedIn = false;
+
 
 // --- UTILITY UI ---
 
@@ -45,6 +47,7 @@ function showChatScreen() {
     userInput.disabled = false;
     document.getElementById('send-btn').disabled = false;
     isUserLoggedIn = true;
+    appendMessage('bot', '👋 Selamat datang! Silakan mulai chat.');
 }
 
 function showLoginScreen() {
@@ -53,6 +56,7 @@ function showLoginScreen() {
     userInput.disabled = true;
     document.getElementById('send-btn').disabled = true;
     isUserLoggedIn = false;
+    chatWindow.innerHTML = '<p class="message bot">Harap Login untuk menggunakan bot.</p>';
 }
 
 // --- LOGIKA AUTHENTIKASI ---
@@ -87,12 +91,12 @@ authForm.addEventListener('submit', async (e) => {
             currentBotMode = isPremium ? 'Premium' : 'Free';
             updateBotStatus();
             showChatScreen();
-            appendMessage('bot', `WSP? Login sukses! Status premium lo: ${isPremium ? 'AKTIF' : 'NONAKTIF'}.`);
+            authMessage.textContent = 'Login sukses!';
         } else {
-            authMessage.textContent = data.error || 'Autentikasi gagal!';
+            authMessage.textContent = data.error || 'Autentikasi gagal! Password atau Username salah.';
         }
     } catch (error) {
-        authMessage.textContent = 'ERROR JARINGAN. Cek server Vercel.';
+        authMessage.textContent = 'ERROR JARINGAN. Cek server Vercel atau koneksi MongoDB.';
     }
 });
 
@@ -103,8 +107,7 @@ navLogoutBtn.addEventListener('click', (e) => {
     userToken = null;
     isPremium = false;
     currentBotMode = 'Free';
-    showLoginScreen();
-    appendMessage('bot', '👋 Kau telah logout. Sampai jumpa lagi, bro!');
+    showLoginScreen(); 
 });
 
 
@@ -117,7 +120,6 @@ function showPremiumBenefits() {
             <li>🔥 **Konten Tak Terbatas:** Akses penuh tanpa filter (uncensored).</li>
             <li>🚀 **Prioritas Server:** Respon lebih cepat dan minim *timeout*.</li>
             <li>🧠 **Kreativitas Maksimal:** Jawaban lebih dalam dan *out-of-the-box*.</li>
-            <li>🛡️ **Dukungan Prioritas:** Bantuan teknis langsung.</li>
         </ul>
         <p>Untuk mengaktifkan, silakan klik tombol **Lanjut Pembayaran**.</p>
         <button id="confirm-payment-btn" class="send-btn" style="background-color: #ff5722; color: white; padding: 10px 15px; border: none; border-radius: 5px; margin-top: 10px;">Lanjut Pembayaran (Rp 50.000)</button>
@@ -129,12 +131,18 @@ function showPremiumBenefits() {
 async function initiatePayment() {
     appendMessage('bot', '🤖 Memproses permintaan pembayaran Anda. Mohon tunggu...');
     
+    if (!userToken) {
+        chatWindow.removeChild(chatWindow.lastChild);
+        appendMessage('bot', '🚨 ERROR: Lo harus login dulu untuk melakukan pembelian premium!');
+        return;
+    }
+
     try {
         const response = await fetch('/api/midtrans-initiate', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${userToken}` // Wajib kirim token
+                'Authorization': `Bearer ${userToken}` 
             },
             body: JSON.stringify({ amount: 50000, item_name: "AlphaAI Premium Access" }) 
         });
@@ -146,11 +154,10 @@ async function initiatePayment() {
             snap.pay(data.snapToken, {
                 onSuccess: function(result) {
                     appendMessage('bot', "🎉 Pembayaran Berhasil! Akses AlphaAI (No-Sensor) Anda sekarang AKTIF!");
-                    // Harusnya server yang update status, tapi di sini kita update UI dulu
-                    isPremium = true; 
-                    currentBotMode = 'Premium';
-                    updateBotStatus();
-                    // JANGAN LUPA SERVER HARUS UPDATE TOKEN JWT DENGAN isPremium = true
+                    // Paksa user login ulang agar token baru diambil dari server
+                    logoutUser(); 
+                    showLoginScreen();
+                    alert("Pembayaran sukses! Silakan login kembali untuk mengaktifkan status Premium.");
                 },
                 onPending: function(result) {
                     appendMessage('bot', "⏳ Pembayaran Pending. Silakan selesaikan pembayaran di Midtrans.");
@@ -159,15 +166,15 @@ async function initiatePayment() {
                     appendMessage('bot', "❌ Pembayaran Gagal. Silakan coba lagi.");
                 }
             });
-        } else if (data.snapToken === 'DUMMY_SNAP_TOKEN_GANTI_ASLI') {
-             appendMessage('bot', '🚨 ERROR: Endpoint Midtrans Server belum diimplementasi (DUMMY TOKEN).');
         } else {
-            appendMessage('bot', `❌ ERROR: Gagal mendapatkan token pembayaran. Server merespon: ${data.error || 'Kesalahan Server.'}`);
+             appendMessage('bot', `❌ ERROR: Gagal mendapatkan token pembayaran. Cek implementasi '/api/midtrans-initiate' di server.js!`);
         }
     } catch (error) {
+        chatWindow.removeChild(chatWindow.lastChild);
         appendMessage('bot', '🚨 ERROR JARINGAN: Tidak dapat terhubung ke server pembayaran.');
     }
 }
+
 
 // --- LOGIKA SUBMIT CHAT ---
 chatForm.addEventListener('submit', async (e) => {
@@ -184,7 +191,7 @@ chatForm.addEventListener('submit', async (e) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${userToken}` // Wajib kirim token
+                'Authorization': `Bearer ${userToken}` 
             },
             body: JSON.stringify({ prompt }) 
         });
@@ -198,7 +205,7 @@ chatForm.addEventListener('submit', async (e) => {
                 appendMessage('bot', '🔔 Jawaban disensor. Upgrade ke **AlphaAI (No-Sensor)** untuk jawaban tak terbatas!');
             }
         } else {
-            appendMessage('bot', `❌ ERROR: ${data.error || 'Server tidak merespon atau terjadi kesalahan internal.'} Mohon login ulang atau periksa log Vercel.`);
+            appendMessage('bot', `❌ ERROR: ${data.error || 'Server tidak merespon.'} Mohon login ulang atau periksa log Vercel.`);
         }
     } catch (error) {
         chatWindow.removeChild(chatWindow.lastChild);
@@ -206,40 +213,11 @@ chatForm.addEventListener('submit', async (e) => {
     }
 });
 
-// --- LOGIKA NAVIGASI SIDEBAR ---
-document.getElementById('nav-alpha-paid').addEventListener('click', function(e) {
-    e.preventDefault();
-    closeNav();
-    if (!isUserLoggedIn) return showLoginScreen();
-    
-    if (isPremium) {
-        currentBotMode = 'Premium';
-        updateBotStatus();
-        appendMessage('bot', '🚀 Mode AlphaAI (No-Sensor) diaktifkan. Silakan tanyakan apa pun tanpa batas!');
-    } else {
-        showPremiumBenefits();
-    }
-});
-
-document.getElementById('nav-gpt-free').addEventListener('click', function(e) {
-    e.preventDefault();
-    closeNav();
-    if (!isUserLoggedIn) return showLoginScreen();
-
-    currentBotMode = 'Free';
-    updateBotStatus();
-    appendMessage('bot', '✅ Mode GPT Free (Aman) diaktifkan kembali. Percakapan akan disaring sesuai kebijakan.');
-});
-
-document.getElementById('nav-keluhan').addEventListener('click', function(e) {
-    e.preventDefault();
-    closeNav();
-    alert('Untuk keluhan dan bantuan, silakan hubungi kami di [Email atau Link Kontak Anda]. Kami akan segera merespon.');
-});
 
 // --- INIT ---
 async function checkAuthStatus() {
     if (!userToken) {
+        updateBotStatus();
         showLoginScreen();
         return;
     }
@@ -256,7 +234,6 @@ async function checkAuthStatus() {
             currentBotMode = isPremium ? 'Premium' : 'Free';
             updateBotStatus();
             showChatScreen();
-            appendMessage('bot', `WSP? Selamat datang kembali! Status premium lo: ${isPremium ? 'AKTIF' : 'NONAKTIF'}.`);
         } else {
             logoutUser();
         }

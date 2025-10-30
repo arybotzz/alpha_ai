@@ -137,7 +137,7 @@ h1 {
 
 /* MODAL STYLE (Untuk Login) */
 .modal {
-    display: none; /* Hidden by default */
+    display: none; 
     position: fixed; 
     z-index: 200; 
     left: 0;
@@ -145,16 +145,16 @@ h1 {
     width: 100%; 
     height: 100%; 
     overflow: auto; 
-    background-color: rgba(0,0,0,0.8); /* Black w/ opacity */
+    background-color: rgba(0,0,0,0.8); 
     align-items: center;
     justify-content: center;
 }
 .modal-content {
     background-color: #fefefe;
-    margin: 15% auto; /* 15% from the top and centered */
+    margin: 15% auto; 
     padding: 30px;
     border: 1px solid #888;
-    width: 90%; /* Could be more or less, depending on screen size */
+    width: 90%; 
     max-width: 400px;
     border-radius: 10px;
     text-align: center;
@@ -197,7 +197,6 @@ h1 {
         max-width: 100%;
     }
     .sidebar {
-        /* Sidebar lebih lebar di HP */
         width: 100%; 
     }
     h1 {
