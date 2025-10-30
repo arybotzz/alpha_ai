@@ -1,0 +1,209 @@
+/* RESET DAN FONT DASAR */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+}
+
+/* CONTAINER UTAMA */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* HEADER DAN TOMBOL HAMBURGER */
+.header {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background-color: #333;
+    color: white;
+}
+.sidebar-toggle {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 30px;
+    cursor: pointer;
+    margin-right: 15px;
+}
+h1 {
+    font-size: 1.5em;
+    margin: 0;
+}
+
+/* AREA CHAT */
+#chat-window {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    border-bottom: 1px solid #ddd;
+}
+.message {
+    padding: 10px;
+    border-radius: 15px;
+    margin-bottom: 10px;
+    max-width: 80%;
+    line-height: 1.4;
+}
+.user {
+    background-color: #007bff;
+    color: white;
+    margin-left: auto;
+}
+.bot {
+    background-color: #e2e2e2;
+    color: #333;
+    margin-right: auto;
+}
+
+/* FORM INPUT */
+#chat-form {
+    display: flex;
+    padding: 15px;
+    border-top: 1px solid #ddd;
+}
+#user-input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-right: 10px;
+    font-size: 1em;
+}
+#send-btn, #confirm-payment-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+#confirm-payment-btn {
+    background-color: #ff5722;
+}
+
+/* SIDEBAR STYLE */
+.sidebar {
+    height: 100%;
+    width: 0; 
+    position: fixed;
+    z-index: 100;
+    top: 0;
+    left: 0;
+    background-color: #111;
+    overflow-x: hidden;
+    transition: 0.5s;
+    padding-top: 60px;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+}
+.sidebar a {
+    padding: 15px 15px 15px 32px;
+    text-decoration: none;
+    font-size: 1.2em;
+    color: #818181;
+    display: block;
+    transition: 0.3s;
+}
+.sidebar a:hover {
+    color: #f1f1f1;
+    background-color: #333;
+}
+.sidebar .closebtn {
+    position: absolute;
+    top: 0;
+    right: 25px;
+    font-size: 36px;
+    margin-left: 50px;
+    color: #f44336;
+}
+.sidebar h3 {
+    padding: 0 15px 15px 32px;
+    color: #eee;
+    font-size: 1.1em;
+    border-bottom: 1px solid #333;
+    margin-bottom: 10px;
+}
+.premium-btn {
+    color: #ffc107 !important;
+    font-weight: bold;
+}
+
+/* MODAL STYLE (Untuk Login) */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; 
+    z-index: 200; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.8); /* Black w/ opacity */
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto; /* 15% from the top and centered */
+    padding: 30px;
+    border: 1px solid #888;
+    width: 90%; /* Could be more or less, depending on screen size */
+    max-width: 400px;
+    border-radius: 10px;
+    text-align: center;
+}
+.modal-content h2 {
+    margin-bottom: 20px;
+    color: #333;
+}
+#auth-form input {
+    width: 90%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+#auth-submit-btn, .toggle-btn {
+    width: 90%;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 5px;
+    font-weight: bold;
+}
+#auth-submit-btn {
+    background-color: #007bff;
+    color: white;
+    margin-bottom: 10px;
+}
+.toggle-btn {
+    background-color: #f4f4f4;
+    color: #555;
+    border: 1px solid #ccc;
+}
+
+
+/* MEDIA QUERY untuk Responsivitas (FIX MOBILE) */
+@media screen and (max-width: 600px) {
+    .container {
+        max-width: 100%;
+    }
+    .sidebar {
+        /* Sidebar lebih lebar di HP */
+        width: 100%; 
+    }
+    h1 {
+        font-size: 1.3em;
+    }
+    .message {
+        max-width: 90%;
+    }
+}

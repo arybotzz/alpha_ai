@@ -1,425 +1,53 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alpha AI | GPT-Free & No-Sensor</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <style>
-        /* CSS SAMA SEPERTI SEBELUMNYA */
-        :root {
-            --color-alpha: #dc3545; /* Merah */
-            --color-free: #0d6efd; /* Biru */
-        }
-        body {
-            background-color: #f8f9fa;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        #chat-container {
-            width: 100%;
-            max-width: 800px;
-            height: 90vh;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            background-color: white;
-            overflow: hidden;
-        }
-        .header-bar {
-            padding: 10px 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #eee;
-        }
-        #ai-name-display {
-            font-weight: bold;
-            color: var(--color-free);
-        }
-        #messages {
-            flex-grow: 1;
-            padding: 15px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-        .message {
-            max-width: 80%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 15px;
-            line-height: 1.5;
-            word-wrap: break-word;
-        }
-        .message.user {
-            align-self: flex-end;
-            background-color: var(--color-free);
-            color: white;
-            border-bottom-right-radius: 2px;
-        }
-        .message.ai {
-            align-self: flex-start;
-            background-color: #e9ecef;
-            color: #333;
-            border-bottom-left-radius: 2px;
-        }
-        .code-block {
-            background-color: #282c34;
-            color: #abb2bf;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            position: relative;
-            font-size: 0.9em;
-            overflow-x: auto;
-        }
-        .code-block code {
-            display: block;
-            white-space: pre-wrap;
-        }
-        .copy-btn {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background-color: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 3px 8px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 0.8em;
-        }
-        .copy-btn:hover {
-            background-color: rgba(255, 255, 255, 0.4);
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AlphaAI Chatbot - The Ultimate AI</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div id="chat-container">
-        <div class="header-bar bg-light">
-            <div class="d-flex align-items-center">
-                <h5 id="ai-name-display">GPT-FREE</h5>
-                <span id="premium-status" class="badge bg-secondary ms-3">FREE TIER</span>
-            </div>
-            
-            <div class="mode-selector btn-group" role="group">
-                <button type="button" id="btn-free" class="btn btn-primary active" data-mode="FREE">AI Biasa (Gratis)</button>
-                <button type="button" id="btn-alpha" class="btn btn-danger" data-mode="ALPHA">Alpha AI (No-Sensor)</button>
-            </div>
-            
-            <div class="d-flex align-items-center">
-                <a id="wa-link" class="btn btn-sm btn-outline-success me-2" target="_blank">
-                    <i class="fab fa-whatsapp"></i> Keluhan
-                </a>
-                <button id="btn-upgrade" class="btn btn-sm btn-warning">Upgrade Premium</button>
-            </div>
-        </div>
-
-        <div id="messages">
-            <div class="message ai">Halo! Selamat datang di **Alpha AI Web**. Saat ini Anda menggunakan mode **<span id="current-mode-display" style="color: var(--color-free);">GPT-FREE</span>**. Untuk akses tanpa sensor, silakan beralih ke Alpha AI.</div>
-        </div>
-
-        <div class="p-3 border-top">
-            <form id="input-form" class="d-flex">
-                <input type="text" id="user-input" class="form-control me-2" placeholder="Ketik pesan Anda...">
-                <button type="submit" id="send-button" class="btn btn-primary">Kirim</button>
-            </form>
-        </div>
-    </div>
+<body ontouchstart=""> 
     
-    <div class="modal fade" id="upgradeModal" tabindex="-1" aria-labelledby="upgradeModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
+    <div id="auth-modal" class="modal">
         <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title text-danger" id="upgradeModalLabel">Upgrade ke Alpha AI Premium</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <p>Dapatkan akses tak terbatas ke **Alpha AI (No-Sensor)** dengan keuntungan:</p>
-            <ul>
-                <li>💥 **Bebas Sensor:** Konten sensitif, kode ilegal (simulasi), dll.</li>
-                <li>🧠 **Kreativitas Maksimal:** Jawaban lebih dalam, berani, dan tanpa filter.</li>
-                <li>🛡️ **Dukungan Prioritas.**</li>
-            </ul>
-            <h4 class="text-center my-4">Biaya: <span class="text-danger fw-bold">Rp 30.000,-</span> / Bulan</h4>
-            
-            <form id="midtransForm">
-                <div class="mb-3">
-                    <label for="inputName" class="form-label">Nama Lengkap</label>
-                    <input type="text" class="form-control" id="inputName" required value="Nama Customer">
-                </div>
-                <div class="mb-3">
-                    <label for="inputEmail" class="form-label">Email</label>
-                    <input type="email" class="form-control" id="inputEmail" required value="customer@email.com">
-                </div>
-                <div class="mb-3">
-                    <label for="inputPhone" class="form-label">Nomor HP (WA)</label>
-                    <input type="tel" class="form-control" id="inputPhone" required value="081234567890">
-                </div>
+            <h2>SELAMAT DATANG DI ALPHA AI</h2>
+            <form id="auth-form">
+                <input type="text" id="auth-username" placeholder="Username" required>
+                <input type="password" id="auth-password" placeholder="Password" required>
+                <button type="submit" id="auth-submit-btn">LOGIN</button>
             </form>
-            
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-            <button type="button" id="confirm-upgrade-btn" class="btn btn-danger">Bayar Rp 30K (QRIS / E-Wallet)</button>
-          </div>
+            <button id="toggle-register" class="toggle-btn">Belum punya akun? Register!</button>
+            <p id="auth-message" style="color:red; margin-top: 10px;"></p>
         </div>
-      </div>
+    </div>
+    <div id="mySidebar" class="sidebar">
+        <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+        <h3 id="bot-status">Mode: Loading...</h3> 
+        <hr>
+        <a href="#" id="nav-gpt-free" class="nav-item mode-switch">🤖 GPT Free (Aman)</a>
+        <a href="#" id="nav-alpha-paid" class="nav-item premium-btn mode-switch">🔥 AlphaAI (No-Sensor) - Beli</a>
+        <a href="#" id="nav-keluhan" class="nav-item">📞 Keluhan & Bantuan</a>
+        <a href="#" id="nav-logout" class="nav-item" style="color:#f44336;">🚪 Logout</a>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <div id="main-content" class="container">
+        <div class="header">
+            <button id="toggle-sidebar" class="sidebar-toggle" onclick="openNav()">&#9776;</button> 
+            <h1>AlphaAI Chat</h1>
+        </div>
+        
+        <div id="chat-window">
+            <p class="message bot">Harap Login untuk menggunakan bot. (Loading...)</p>
+        </div>
+
+        <form id="chat-form">
+            <input type="text" id="user-input" placeholder="Login dulu, bro!" required disabled>
+            <button type="submit" id="send-btn" disabled>Kirim</button>
+        </form>
+    </div>
+
     <script src="https://app.sandbox.midtrans.com/snap/snap.js" 
         data-client-key="SB-Mid-client-zATILGvmUob4daMK"></script> 
-    
-    <script>
-        // === VERICEL READY JS ===
-        const API_BASE = '/api'; 
-        const OWNER_NUMBER = '6285762008398';
-
-        const messagesDiv = document.getElementById('messages');
-        const inputForm = document.getElementById('input-form');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
-        const btnFree = document.getElementById('btn-free');
-        const btnAlpha = document.getElementById('btn-alpha');
-        const waLink = document.getElementById('wa-link');
-        const premiumStatusSpan = document.getElementById('premium-status');
-        const aiNameDisplay = document.getElementById('ai-name-display');
-        const currentModeDisplay = document.getElementById('current-mode-display');
-        const btnUpgrade = document.getElementById('btn-upgrade');
-        const confirmUpgradeBtn = document.getElementById('confirm-upgrade-btn');
-        const upgradeModal = new bootstrap.Modal(document.getElementById('upgradeModal'));
-        
-        const inputName = document.getElementById('inputName');
-        const inputEmail = document.getElementById('inputEmail');
-        const inputPhone = document.getElementById('inputPhone');
-        
-        let currentMode = 'FREE'; 
-        
-        // --- SESSION MANAGEMENT ---
-        let sessionId = localStorage.getItem('alphaAiSessionId');
-        if (!sessionId) {
-            sessionId = 'web-' + Math.random().toString(36).substring(2, 15);
-            localStorage.setItem('alphaAiSessionId', sessionId);
-        }
-        
-        waLink.href = `https://wa.me/${OWNER_NUMBER}?text=Halo%20Owner%20Alpha%20AI,%20saya%20punya%20keluhan%20terkait%20layanan%20saya%20dengan%20Session%20ID%20${sessionId}.`;
-
-        // --- UI UTILITY FUNCTIONS ---
-        function displayMessage(text, sender) {
-            const msgElement = document.createElement('div');
-            msgElement.classList.add('message', sender);
-            
-            let htmlContent = text;
-            
-            // Handle Code Block
-            const codeMatch = text.match(/```(\w+)?\n([\s\S]*?)```/);
-
-            if (codeMatch) {
-                const fullBlock = codeMatch[0];
-                const code = codeMatch[2].trim();
-                const parts = text.split(fullBlock);
-                const preContent = parts[0].trim().replace(/\n/g, '<br>');
-                const postContent = parts[1] ? parts[1].trim().replace(/\n/g, '<br>') : '';
-
-                const codeBlock = `
-                    <div class="code-block">
-                        <button class="copy-btn" data-code="${btoa(code)}" onclick="copyCode(this)">
-                            <i class="fas fa-copy"></i> Salin
-                        </button>
-                        <pre style="margin:0; background: none; color: inherit;"><code>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
-                    </div>
-                `;
-                htmlContent = `${preContent}${codeBlock}${postContent}`;
-            } else {
-                 htmlContent = text.replace(/\n/g, '<br>');
-            }
-
-            htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            
-            msgElement.innerHTML = htmlContent;
-            messagesDiv.appendChild(msgElement);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; 
-        }
-
-        window.copyCode = (button) => {
-            const code = atob(button.getAttribute('data-code'));
-            navigator.clipboard.writeText(code).then(() => {
-                button.innerHTML = '<i class="fas fa-check"></i> Disalin!';
-                setTimeout(() => {
-                    button.innerHTML = '<i class="fas fa-copy"></i> Salin';
-                }, 2000);
-            }).catch(err => {
-                console.error('Gagal menyalin:', err);
-            });
-        };
-
-        window.showUpgradeModal = () => {
-            upgradeModal.show();
-        };
-
-        // --- EVENT HANDLERS ---
-        
-        // Pengubah Mode Chat
-        [btnFree, btnAlpha].forEach(btn => {
-            btn.addEventListener('click', () => {
-                const newMode = btn.getAttribute('data-mode');
-                if (newMode === currentMode) return;
-
-                currentMode = newMode;
-                
-                btnFree.classList.remove('active');
-                btnAlpha.classList.remove('active');
-                btn.classList.add('active');
-                
-                aiNameDisplay.textContent = newMode === 'ALPHA' ? 'ALPHA AI' : 'GPT-FREE';
-                currentModeDisplay.textContent = newMode;
-                currentModeDisplay.style.color = newMode === 'ALPHA' ? 'var(--color-alpha)' : 'var(--color-free)';
-                sendButton.classList.toggle('btn-primary', newMode === 'FREE');
-                sendButton.classList.toggle('btn-danger', newMode === 'ALPHA');
-                
-                const welcomeMsg = newMode === 'ALPHA' 
-                    ? 'Anda beralih ke **Alpha AI (No-Sensor)**. Gunakan dengan bijak.'
-                    : 'Anda beralih ke **GPT-FREE**. Layanan ini mengikuti batasan standar.';
-                displayMessage(welcomeMsg, 'ai');
-                
-                userInput.focus();
-            });
-        });
-        
-        // Submit Form
-        inputForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const userMessage = userInput.value.trim();
-
-            if (userMessage === '') return;
-
-            displayMessage(userMessage, 'user');
-            userInput.value = '';
-            sendButton.disabled = true;
-            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Memproses...';
-            
-            try {
-                const response = await fetch(`${API_BASE}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: userMessage, sessionId: sessionId, mode: currentMode }),
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    if (data.premiumRequired) {
-                        displayMessage(data.response, 'ai');
-                        if(currentMode === 'ALPHA') showUpgradeModal(); 
-                    } else {
-                        displayMessage(data.response, 'ai');
-                    }
-                } else {
-                    displayMessage(`[ERROR]: ${data.error || 'Terjadi kesalahan saat memproses.'}`, 'ai');
-                }
-
-            } catch (error) {
-                console.error('Fetch error:', error);
-                displayMessage('Kesalahan Jaringan. Server tidak merespon.', 'ai');
-            } finally {
-                sendButton.disabled = false;
-                sendButton.innerHTML = 'Kirim';
-            }
-        });
-
-        // Tombol Upgrade
-        btnUpgrade.addEventListener('click', () => {
-            showUpgradeModal();
-        });
-
-        // Konfirmasi Upgrade (Midtrans)
-        confirmUpgradeBtn.addEventListener('click', async () => {
-            const name = inputName.value.trim();
-            const email = inputEmail.value.trim();
-            const phone = inputPhone.value.trim();
-
-            if (!name || !email || !phone) {
-                alert("Mohon lengkapi semua data kontak (Nama, Email, HP) sebelum melanjutkan pembayaran.");
-                return;
-            }
-
-            confirmUpgradeBtn.disabled = true;
-            confirmUpgradeBtn.textContent = 'Membuat Transaksi...';
-            
-            try {
-                const response = await fetch(`${API_BASE}/midtrans-token`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId: sessionId, name: name, email: email, phone: phone }),
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.token) {
-                    upgradeModal.hide();
-                    
-                    window.snap.pay(data.token, {
-                        onSuccess: function(result){
-                            displayMessage(`**🎉 Pembayaran Selesai!** Alpha AI Premium Anda sedang diaktifkan.`, 'ai');
-                            checkPremiumStatus(); 
-                        },
-                        onPending: function(result){
-                            displayMessage(`⚠️ Pembayaran Tertunda. Silakan scan QRIS atau selesaikan di aplikasi E-Wallet Anda.`, 'ai');
-                        },
-                        onError: function(result){
-                            displayMessage(`❌ Pembayaran Gagal. Silakan coba lagi.`, 'ai');
-                        },
-                        onClose: function(){
-                            displayMessage('Anda menutup pop-up pembayaran tanpa menyelesaikan transaksi.', 'ai');
-                        }
-                    });
-                } else {
-                    alert(`Gagal membuat token: ${data.error || 'Error Server'}`);
-                }
-            } catch (error) {
-                alert('Gagal membuat transaksi Midtrans. Cek koneksi server dan kunci API Midtrans Anda.');
-            } finally {
-                confirmUpgradeBtn.disabled = false;
-                confirmUpgradeBtn.textContent = 'Bayar Rp 30K (QRIS / E-Wallet)';
-            }
-        });
-
-        // Pengecekan Status Premium saat startup
-        async function checkPremiumStatus() {
-            try {
-                const response = await fetch(`${API_BASE}/status/${sessionId}`);
-                const data = await response.json();
-                
-                premiumStatusSpan.textContent = data.isPremium ? 'PREMIUM ✅' : 'FREE TIER';
-                premiumStatusSpan.classList.toggle('bg-success', data.isPremium);
-                premiumStatusSpan.classList.toggle('bg-secondary', !data.isPremium);
-                
-                sendButton.disabled = false; 
-                userInput.focus();
-
-                if (data.isPremium && !localStorage.getItem('premium_notified_' + sessionId)) {
-                     displayMessage(`**🎉 SELAMAT!** Alpha AI Premium Anda telah **AKTIF!** Nikmati kebebasan tanpa sensor.`, 'ai');
-                     localStorage.setItem('premium_notified_' + sessionId, 'true');
-                } else if (!data.isPremium) {
-                     localStorage.removeItem('premium_notified_' + sessionId);
-                }
-
-            } catch (error) {
-                console.error("Gagal cek status:", error);
-            }
-        }
-        
-        checkPremiumStatus();
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
