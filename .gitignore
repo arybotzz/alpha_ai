@@ -1,0 +1,13 @@
+# Dependencies
+/node_modules
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+# Kunci rahasia sudah di Vercel Env, tapi ini untuk jaga-jaga
+.env
+.env.local
+.env.*.local
