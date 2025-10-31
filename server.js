@@ -4,7 +4,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { GoogleGenAI } = require('@google/genai');
+const axios = require('axios');
 
 const app = express();
 const port = process.env.PORT || 3000;
