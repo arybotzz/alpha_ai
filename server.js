@@ -99,7 +99,7 @@ app.post('/api/chat', protect, async (req, res) => {
     if (!GEMINI_API_KEY) {
         return res.status(500).json({ error: "GEMINI_API_KEY tidak ditemukan di Vercel Environment Variables." });
     }
-    const ai = new GoogleGenAI(GEMINI_API_KEY);
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     let safetySettings = [];
     if (mode === 'Premium') {
