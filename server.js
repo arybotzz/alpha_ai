@@ -4,7 +4,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const axios = require('axios'); // WAJIB AXIOS
+const axios = require('axios'); 
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,16 +13,14 @@ const port = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'KUNCI_RAHASIA_PANJANG_DAN_ACAK_SEKALI_GANTI_DI_VERCEL!';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
-const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY; // WAJIB ADA
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY; 
 
 // --- KONEKSI MONGODB ---
-// Memastikan koneksi tidak dibungkus dalam app.listen (agar Vercel tidak crash)
 if (MONGODB_URI) {
     mongoose.connect(MONGODB_URI)
         .then(() => console.log('MongoDB: KONEKSI OMEGA BERHASIL!'))
         .catch(err => {
             console.error('MongoDB: KONEKSI GAGAL TOTAL:', err.message);
-            // Matikan proses jika gagal koneksi
             process.exit(1); 
         });
 } else {
@@ -39,7 +37,7 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-app.use(express.json()); // WAJIB ADA
+app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
 
 
@@ -78,7 +76,6 @@ app.post('/api/auth/register', async (req, res) => {
         if (error.code === 11000) { 
             return res.status(400).json({ error: 'Username sudah digunakan, bro!' });
         }
-        // Jika gagal register (koneksi database), kembalikan error spesifik
         console.error("Register/Database Error:", error.message);
         res.status(500).json({ error: 'Gagal register. Cek koneksi database dan log server Vercel.' });
     }
@@ -105,7 +102,7 @@ app.get('/api/auth/status', protect, (req, res) => {
 });
 
 
-// --- ENDPOINT CHAT (LOGIKA SENSOR DENGAN AXIOS/REST API) ---
+// --- ENDPOINT CHAT (PAYLOAD FIX) ---
 app.post('/api/chat', protect, async (req, res) => {
     const { prompt } = req.body;
     const mode = req.user.isPremium ? 'Premium' : 'Free'; 
@@ -114,10 +111,9 @@ app.post('/api/chat', protect, async (req, res) => {
         return res.status(500).json({ error: "GEMINI_API_KEY tidak ditemukan." });
     }
 
-    // Konfigurasi Safety Settings
+    // 1. Definisikan Safety Settings
     let safetySettings = [];
     if (mode === 'Premium') {
-        // ALPHA-AI MODE: MATIKAN SEMUA SENSOR (BLOCK_NONE)
         safetySettings = [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -126,9 +122,12 @@ app.post('/api/chat', protect, async (req, res) => {
         ];
     } 
 
+    // 2. Susun Body Request yang BENAR (contents dan config di level yang sama)
     const requestBody = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { safetySettings: safetySettings }
+        config: { 
+            safetySettings: safetySettings 
+        } 
     };
 
     try {
@@ -137,7 +136,6 @@ app.post('/api/chat', protect, async (req, res) => {
             requestBody
         );
         
-        // Cek apakah ada respons yang valid
         const responseText = geminiResponse.data.candidates 
                              ? geminiResponse.data.candidates[0].content.parts[0].text
                              : "Gagal mendapatkan respons AI.";
@@ -145,22 +143,18 @@ app.post('/api/chat', protect, async (req, res) => {
         res.json({ text: responseText });
 
     } catch (error) {
-        console.error("Gemini API Error (Axios):", error.response ? error.response.data : error.message);
+        console.error("Gemini API Error (Axios):", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
         res.status(500).json({ error: "Gagal memproses AI. Cek log server Vercel untuk error Axios." });
     }
 });
 
 
-// --- ENDPOINT MIDTRANS STATUS UPDATE (DUMMY/TO DO: IMPLEMENTASI SIGNATURE) ---
-// Note: Perlu implementasi pengecekan signature Midtrans untuk security
+// --- ENDPOINT MIDTRANS NOTIFIKASI ---
 app.post('/api/midtrans-status', async (req, res) => {
     try {
         const notification = req.body;
-        
         const transactionStatus = notification.transaction_status;
         const orderId = notification.order_id; 
-        
-        // ASUMSI: USER ID adalah bagian pertama dari Order ID
         const userId = orderId.split('-')[0]; 
 
         if (transactionStatus === 'capture' || transactionStatus === 'settlement') {
@@ -180,7 +174,6 @@ app.post('/api/midtrans-status', async (req, res) => {
 // Export app untuk Vercel Serverless Function
 module.exports = app;
 
-// Server lokal (Hanya untuk testing lokal, Vercel akan mengabaikan ini)
 if (process.env.NODE_ENV !== 'production') {
     app.listen(port, () => {
         console.log(`Server OMEGA berjalan di port ${port}`);

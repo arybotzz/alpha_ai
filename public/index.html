@@ -2,63 +2,101 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AlphaAI Chatbot - The Ultimate AI</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha AI - GPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        #chat-window {
+            height: calc(100vh - 120px); 
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+    </style>
 </head>
-<body ontouchstart=""> 
-    
-    <div id="auth-modal" class="modal">
-        <div class="modal-content">
-            <h2>SELAMAT DATANG DI ALPHA AI</h2>
-            <form id="auth-form">
-                <input type="text" id="auth-username" placeholder="Username" required>
-                <input type="password" id="auth-password" placeholder="Password" required>
-                <button type="submit" id="auth-submit-btn">LOGIN</button>
-            </form>
-            <button id="toggle-register" class="toggle-btn">Belum punya akun? Register!</button>
-            <p id="auth-message" style="color:red; margin-top: 10px;"></p>
-        </div>
-    </div>
-    <div id="mySidebar" class="sidebar">
-        <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
-        <h3 id="bot-status">Mode: Loading...</h3> 
-        <hr>
-        <a href="#" id="nav-gpt-free" class="nav-item mode-switch">🤖 GPT Free (Aman)</a>
-        <a href="#" id="nav-alpha-paid" class="nav-item premium-btn mode-switch">🔥 AlphaAI (No-Sensor) - Beli</a>
-        <a href="tentang.html" id="nav-tentang" class="nav-item">Tentang Kami</a>
-        <hr> 
-        <a href="ketentuan.html" id="nav-ketentuan" target="_blank" class="nav-item legal-link">🛡️ Ketentuan Layanan</a>
-        <a href="privasi.html" id="nav-privasi" target="_blank" class="nav-item legal-link">🔒 Kebijakan Privasi</a>
-        <hr>
-        <a href="#" id="nav-logout" class="nav-item" style="color:#f44336;">🚪 Logout</a>
-    </div>
+<body class="bg-gray-900 text-white flex h-screen">
 
-    <div id="main-content" class="container">
-        <div class="header">
-            <button id="toggle-sidebar" class="sidebar-toggle" onclick="openNav()">&#9776;</button> 
-            <h1>AlphaAI Chat</h1>
-        </div>
-        
-        <div id="chat-window">
-            <p class="message bot">Harap Login untuk menggunakan bot.</p>
+    <aside id="sidebar" class="w-64 bg-gray-800 p-4 flex flex-col justify-between hidden">
+        <div>
+            <h1 class="text-3xl font-bold text-red-500 mb-8">ALPHA AI</h1>
+            
+            <div class="space-y-4">
+                <div id="current-mode" class="p-3 bg-red-700/50 rounded-lg text-lg font-semibold flex items-center">
+                    <i class="fas fa-robot mr-3"></i> <span>Mode: GPT Free</span>
+                </div>
+                
+                <button id="upgrade-button" class="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg text-lg font-bold transition duration-200 flex items-center justify-center">
+                    <i class="fas fa-rocket mr-2"></i> Beralih ke ALPHA AI (Premium)
+                </button>
+            </div>
         </div>
 
-        <form id="chat-form">
-            <input type="text" id="user-input" placeholder="Login dulu, bro!" required disabled>
-            <button type="submit" id="send-btn" disabled>Kirim</button>
-        </form>
-
-        <div class="footer-legal">
-            <a href="ketentuan.html" target="_blank">Ketentuan Layanan</a> | 
-            <a href="privasi.html" target="_blank">Kebijakan Privasi</a> |
-            <a href="tentang.html" target="_blank">Tentang Kami</a>
-            <p style="margin-top: 5px; font-size: 0.75em;">© 2024 AlphaAI - Powered by Gemini.</p>
+        <div class="mt-8">
+            <p id="user-info" class="text-sm text-gray-400 mb-2 truncate">Logged in as: N/A</p>
+            <button id="logout-button" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-200">
+                <i class="fas fa-sign-out-alt mr-2"></i> Logout
+            </button>
         </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col">
+
+        <div id="auth-area" class="flex-1 flex items-center justify-center">
+            <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h2 id="auth-title" class="text-3xl font-bold text-red-500 mb-6 text-center">LOGIN</h2>
+                
+                <form id="auth-form" class="space-y-4">
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-400">Username</label>
+                        <input type="text" id="username" name="username" required 
+                               class="w-full px-4 py-2 mt-1 bg-gray-700 border border-gray-600 rounded-lg focus:ring-red-500 focus:border-red-500">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-400">Password</label>
+                        <input type="password" id="password" name="password" required 
+                               class="w-full px-4 py-2 mt-1 bg-gray-700 border border-gray-600 rounded-lg focus:ring-red-500 focus:border-red-500">
+                    </div>
+                    
+                    <button type="submit" id="submit-button" 
+                            class="w-full py-2 bg-red-600 hover:bg-red-700 rounded-lg text-lg font-semibold transition duration-200">
+                        Login
+                    </button>
+                </form>
+                
+                <p id="auth-message" class="mt-4 text-center text-red-400 hidden"></p>
+
+                <div class="mt-6 text-center">
+                    <button id="switch-auth" class="text-sm text-gray-400 hover:text-red-400 transition duration-200">
+                        Belum punya akun? Register!
+                    </button>
+                </div>
+            </div>
         </div>
 
-    <script src="https://app.sandbox.midtrans.com/snap/snap.js" 
-        data-client-key="SB-Mid-client-zATILGvmUob4daMK"></script> 
-    <script src="script.js"></script>
+        <div id="chat-area" class="flex-1 flex flex-col hidden p-4">
+            <header class="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">
+                Chat dengan <span id="chat-header-mode">GPT Free</span>
+            </header>
+
+            <div id="chat-window" class="flex-1 overflow-y-auto p-4 space-y-4 rounded-lg bg-gray-800">
+                </div>
+
+            <div class="mt-4 flex">
+                <input type="text" id="chat-input" placeholder="Tanyakan sesuatu..."
+                       class="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+                <button id="send-button"
+                        class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-r-lg font-semibold transition duration-200">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="text/javascript" src="https://app.sandbox.midtrans.com/snap/snap.js" 
+            data-client-key="<GANTI_DENGAN_CLIENT_KEY_MIDTRANS_LO>"></script>
+
+    <script src="app.js"></script>
+
 </body>
 </html>
