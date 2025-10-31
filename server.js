@@ -29,7 +29,7 @@ const User = mongoose.model('User', UserSchema);
 
 app.use(express.json());
 // Middleware untuk menyajikan file statis (HTML, CSS, JS, Gambar, File Legal)
-app.use(express.static('public')); 
+//app.use(express.static('public')); 
 
 // --- MIDDLEWARE VERIFIKASI JWT ---
 const protect = (req, res, next) => {
