@@ -1,4 +1,4 @@
-// server.js - FULL FIX OMEGA AUTH & AI (VERSI TERAKHIR)
+// server.js - FULL FIX OMEGA AUTH & AI (VERSI TERAKHIR, BEBAS SYNTAX)
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -9,26 +9,26 @@ const { GoogleGenAI } = require('@google/genai');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// --- KONFIGURASI KRITIS ---
-const JWT_SECRET = process.env.JWT_SECRET || 'PASTE_KUNCI_RAHASIA_PANJANG_LO_DI_SINI_ANJING!';
+// --- KONFIGURASI KRITIS (HARUS DIISI DI VERCEL ENVIRONMENT VARIABLES!) ---
+const JWT_SECRET = process.env.JWT_SECRET || 'KUNCI_RAHASIA_PANJANG_DAN_ACAK_SEKALI_GANTI_DI_VERCEL!';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- KONEKSI MONGODB ---
 mongoose.connect(MONGODB_URI)
 .then(() => console.log('MongoDB: KONEKSI OMEGA BERHASIL!'))
-.catch(err => console.error('MongoDB: KONEKSI GAGAL TOTAL:', err.message)); // Tampilkan error yang jelas
+.catch(err => console.error('MongoDB: KONEKSI GAGAL TOTAL:', err.message));
 
 // --- MODEL USER ---
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    isPremium: { type: Boolean, default: false }, // Status Premium!
+    isPremium: { type: Boolean, default: false },
 });
 const User = mongoose.model('User', UserSchema);
-// --- END MODEL ---
 
 app.use(express.json());
+// Middleware untuk menyajikan file statis (HTML, CSS, JS, Gambar, File Legal)
 app.use(express.static('public')); 
 
 // --- MIDDLEWARE VERIFIKASI JWT ---
@@ -52,7 +52,6 @@ const protect = (req, res, next) => {
 
 // --- ENDPOINTS OTENTIKASI ---
 
-// 1. ENDPOINT REGISTER
 app.post('/api/auth/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username dan Password harus diisi.' });
@@ -65,7 +64,7 @@ app.post('/api/auth/register', async (req, res) => {
         const token = jwt.sign({ id: user._id, isPremium: user.isPremium }, JWT_SECRET, { expiresIn: '7d' });
         res.status(201).json({ status: 'success', token, isPremium: user.isPremium });
     } catch (error) {
-        if (error.code === 11000) { // Duplikat Key (Username sudah ada)
+        if (error.code === 11000) { 
             return res.status(400).json({ error: 'Username sudah digunakan, bro!' });
         }
         console.error("Register Error:", error);
@@ -73,7 +72,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// 2. ENDPOINT LOGIN
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -89,17 +87,15 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// 3. ENDPOINT VERIFIKASI STATUS
 app.get('/api/auth/status', protect, (req, res) => {
     res.json({ status: 'success', isPremium: req.user.isPremium });
 });
 
-// --- ENDPOINT CHAT (PROTECTED & LOGIKA SENSOR) ---
+// --- ENDPOINT CHAT (LOGIKA SENSOR) ---
 app.post('/api/chat', protect, async (req, res) => {
     const { prompt } = req.body;
     const mode = req.user.isPremium ? 'Premium' : 'Free'; 
     
-    // Pastikan API Key ada sebelum inisialisasi
     if (!GEMINI_API_KEY) {
         return res.status(500).json({ error: "GEMINI_API_KEY tidak ditemukan di Vercel Environment Variables." });
     }
@@ -107,7 +103,7 @@ app.post('/api/chat', protect, async (req, res) => {
 
     let safetySettings = [];
     if (mode === 'Premium') {
-        // ALPHA-AI MODE: MATIKAN SEMUA SENSOR
+        // ALPHA-AI MODE: MATIKAN SEMUA SENSOR (BLOCK_NONE)
         safetySettings = [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -131,26 +127,22 @@ app.post('/api/chat', protect, async (req, res) => {
     }
 });
 
-// --- ENDPOINT MIDTRANS STATUS UPDATE (WAJIB DIBUAT ASLI) ---
-// Midtrans akan memanggil endpoint ini
+// --- ENDPOINT MIDTRANS STATUS UPDATE (DUMMY/TO DO: IMPLEMENTASI SIGNATURE) ---
 app.post('/api/midtrans-status', async (req, res) => {
     try {
         const notification = req.body;
-        // JANGAN LUPA VALIDASI SIGNATURE KEY! (Hapus komentar jika sudah implementasi)
         
         const transactionStatus = notification.transaction_status;
         const orderId = notification.order_id; 
         
-        // ASUMSI: USER ID adalah bagian dari Order ID
-        const userId = orderId.split('-')[0]; // Ambil ID user dari Order ID Midtrans
+        // ASUMSI: USER ID adalah bagian pertama dari Order ID
+        const userId = orderId.split('-')[0]; 
 
         if (transactionStatus === 'capture' || transactionStatus === 'settlement') {
-            // Pembayaran Berhasil
             await User.findByIdAndUpdate(userId, { isPremium: true });
             console.log(`[OMEGA LOG]: User ${userId} berhasil di-upgrade ke Premium.`);
         } 
         
-        // Midtrans Wajib menerima status 200 OK
         res.status(200).send('OK');
 
     } catch (error) {

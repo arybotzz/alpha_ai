@@ -1,4 +1,4 @@
-// public/script.js (MODIFIKASI KRUSIAL)
+// public/script.js (FINAL FIX)
 
 const chatWindow = document.getElementById('chat-window');
 const chatForm = document.getElementById('chat-form');
@@ -19,7 +19,6 @@ let isRegisterMode = false;
 let userToken = localStorage.getItem('jwtToken'); 
 let isUserLoggedIn = false;
 
-
 // --- UTILITY UI ---
 
 function openNav() {
@@ -39,6 +38,16 @@ function appendMessage(sender, text) {
 
 function updateBotStatus() {
     botStatus.textContent = `Mode: ${currentBotMode === 'Premium' ? 'AlphaAI (No-Sensor) 😈' : 'GPT Free (Aman) 😇'}`;
+    const premiumBtn = document.getElementById('nav-alpha-paid');
+    if (isPremium) {
+        premiumBtn.textContent = '🔥 AlphaAI (Premium Aktif)';
+        premiumBtn.style.color = '#28a745'; 
+        premiumBtn.removeEventListener('click', showPremiumBenefits);
+    } else {
+        premiumBtn.textContent = '🔥 AlphaAI (No-Sensor) - Beli';
+        premiumBtn.style.color = '#ffc107'; 
+        premiumBtn.addEventListener('click', showPremiumBenefits);
+    }
 }
 
 function showChatScreen() {
@@ -56,7 +65,14 @@ function showLoginScreen() {
     userInput.disabled = true;
     document.getElementById('send-btn').disabled = true;
     isUserLoggedIn = false;
-    chatWindow.innerHTML = '<p class="message bot">Harap Login untuk menggunakan bot.</p>';
+    chatWindow.innerHTML = '<p class="message bot">Harap Login untuk menggunakan ALPHA-AI.</p>';
+}
+
+function logoutUser() {
+    localStorage.removeItem('jwtToken');
+    userToken = null;
+    isPremium = false;
+    currentBotMode = 'Free';
 }
 
 // --- LOGIKA AUTHENTIKASI ---
@@ -96,6 +112,7 @@ authForm.addEventListener('submit', async (e) => {
             authMessage.textContent = data.error || 'Autentikasi gagal! Password atau Username salah.';
         }
     } catch (error) {
+        // ERROR JARINGAN ATAU SERVER CRASH DITAMPILKAN DI SINI
         authMessage.textContent = 'ERROR JARINGAN. Cek server Vercel atau koneksi MongoDB.';
     }
 });
@@ -103,17 +120,31 @@ authForm.addEventListener('submit', async (e) => {
 navLogoutBtn.addEventListener('click', (e) => {
     e.preventDefault();
     closeNav();
-    localStorage.removeItem('jwtToken');
-    userToken = null;
-    isPremium = false;
-    currentBotMode = 'Free';
+    logoutUser();
     showLoginScreen(); 
+});
+
+// Listener untuk link statis
+['nav-tentang', 'nav-ketentuan', 'nav-privasi'].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) {
+        element.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeNav();
+            window.open(element.getAttribute('href'), '_blank');
+        });
+    }
 });
 
 
 // --- LOGIKA MIDTRANS PAYMENT ---
 
-function showPremiumBenefits() {
+function showPremiumBenefits(e) {
+    e.preventDefault();
+    closeNav();
+
+    if (isPremium) return; // Sudah premium, batalkan
+
     const benefits = `
         <p><strong>Kenapa Upgrade ke AlphaAI (No-Sensor)?</strong></p>
         <ul>
@@ -138,6 +169,7 @@ async function initiatePayment() {
     }
 
     try {
+        // ASUMSI: Endpoint ini akan memanggil Midtrans API (diimplementasikan di server.js)
         const response = await fetch('/api/midtrans-initiate', {
             method: 'POST',
             headers: {
@@ -150,12 +182,17 @@ async function initiatePayment() {
         const data = await response.json();
         chatWindow.removeChild(chatWindow.lastChild); 
 
-        if (data.snapToken && data.snapToken !== 'DUMMY_SNAP_TOKEN_GANTI_ASLI') {
+        if (data.snapToken) {
+            // Cek jika Snap Token valid atau dummy
+            if (data.snapToken === 'DUMMY_SNAP_TOKEN_GANTI_ASLI') {
+                 appendMessage('bot', `❌ ERROR: Snap Token masih DUMMY. Implementasikan Midtrans Client di server.js!`);
+                 return;
+            }
+
             snap.pay(data.snapToken, {
                 onSuccess: function(result) {
                     appendMessage('bot', "🎉 Pembayaran Berhasil! Akses AlphaAI (No-Sensor) Anda sekarang AKTIF!");
-                    // Paksa user login ulang agar token baru diambil dari server
-                    logoutUser(); 
+                    logoutUser(); // Logout paksa agar token baru diambil saat login
                     showLoginScreen();
                     alert("Pembayaran sukses! Silakan login kembali untuk mengaktifkan status Premium.");
                 },
@@ -167,7 +204,7 @@ async function initiatePayment() {
                 }
             });
         } else {
-             appendMessage('bot', `❌ ERROR: Gagal mendapatkan token pembayaran. Cek implementasi '/api/midtrans-initiate' di server.js!`);
+             appendMessage('bot', `❌ ERROR: Gagal mendapatkan token pembayaran. ${data.error || ''}`);
         }
     } catch (error) {
         chatWindow.removeChild(chatWindow.lastChild);
@@ -238,7 +275,9 @@ async function checkAuthStatus() {
             logoutUser();
         }
     } catch (error) {
+        // Kegagalan koneksi server saat inisialisasi
         logoutUser();
+        showLoginScreen(); 
     }
 }
 

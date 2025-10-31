@@ -135,6 +135,23 @@ h1 {
     font-weight: bold;
 }
 
+/* FOOTER LEGAL */
+.footer-legal {
+    padding: 10px;
+    text-align: center;
+    border-top: 1px solid #ddd;
+    background-color: #f4f4f4;
+    font-size: 0.8em;
+}
+.footer-legal a {
+    color: #007bff;
+    text-decoration: none;
+    margin: 0 5px;
+}
+.footer-legal a:hover {
+    text-decoration: underline;
+}
+
 /* MODAL STYLE (Untuk Login) */
 .modal {
     display: none; 
