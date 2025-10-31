@@ -1,23 +1,35 @@
-// server.js - FULL FIX OMEGA AUTH & AI (VERSI TERAKHIR, BEBAS SYNTAX)
+// server.js - FULL FIX OMEGA (VERSI FINAL TERBAIK)
 
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const axios = require('axios');
+const axios = require('axios'); // WAJIB AXIOS
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// --- KONFIGURASI KRITIS (HARUS DIISI DI VERCEL ENVIRONMENT VARIABLES!) ---
+// --- KONFIGURASI ENVIRONMENT VARIABLES (HARUS DIISI DI VERCEL!) ---
 const JWT_SECRET = process.env.JWT_SECRET || 'KUNCI_RAHASIA_PANJANG_DAN_ACAK_SEKALI_GANTI_DI_VERCEL!';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY; // WAJIB ADA
 
 // --- KONEKSI MONGODB ---
-mongoose.connect(MONGODB_URI)
-.then(() => console.log('MongoDB: KONEKSI OMEGA BERHASIL!'))
-.catch(err => console.error('MongoDB: KONEKSI GAGAL TOTAL:', err.message));
+// Memastikan koneksi tidak dibungkus dalam app.listen (agar Vercel tidak crash)
+if (MONGODB_URI) {
+    mongoose.connect(MONGODB_URI)
+        .then(() => console.log('MongoDB: KONEKSI OMEGA BERHASIL!'))
+        .catch(err => {
+            console.error('MongoDB: KONEKSI GAGAL TOTAL:', err.message);
+            // Matikan proses jika gagal koneksi
+            process.exit(1); 
+        });
+} else {
+    console.error('MONGODB_URI: TIDAK DITEMUKAN! SERVER TIDAK AKAN JALAN!');
+    process.exit(1);
+}
+
 
 // --- MODEL USER ---
 const UserSchema = new mongoose.Schema({
@@ -27,9 +39,9 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-app.use(express.json());
-// Middleware untuk menyajikan file statis (HTML, CSS, JS, Gambar, File Legal)
-//app.use(express.static('public')); 
+app.use(express.json()); // WAJIB ADA
+app.use(express.urlencoded({ extended: true }));
+
 
 // --- MIDDLEWARE VERIFIKASI JWT ---
 const protect = (req, res, next) => {
@@ -51,7 +63,6 @@ const protect = (req, res, next) => {
 
 
 // --- ENDPOINTS OTENTIKASI ---
-
 app.post('/api/auth/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username dan Password harus diisi.' });
@@ -67,8 +78,9 @@ app.post('/api/auth/register', async (req, res) => {
         if (error.code === 11000) { 
             return res.status(400).json({ error: 'Username sudah digunakan, bro!' });
         }
-        console.error("Register Error:", error);
-        res.status(500).json({ error: 'Gagal register. Cek koneksi dan log server Vercel.' });
+        // Jika gagal register (koneksi database), kembalikan error spesifik
+        console.error("Register/Database Error:", error.message);
+        res.status(500).json({ error: 'Gagal register. Cek koneksi database dan log server Vercel.' });
     }
 });
 
@@ -83,7 +95,8 @@ app.post('/api/auth/login', async (req, res) => {
         const token = jwt.sign({ id: user._id, isPremium: user.isPremium }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ status: 'success', token, isPremium: user.isPremium });
     } catch (error) {
-        res.status(500).json({ error: 'Gagal login. Server crash!' });
+        console.error("Login Error:", error.message);
+        res.status(500).json({ error: 'Gagal login. Cek log server Vercel!' });
     }
 });
 
@@ -91,16 +104,17 @@ app.get('/api/auth/status', protect, (req, res) => {
     res.json({ status: 'success', isPremium: req.user.isPremium });
 });
 
-// --- ENDPOINT CHAT (LOGIKA SENSOR) ---
+
+// --- ENDPOINT CHAT (LOGIKA SENSOR DENGAN AXIOS/REST API) ---
 app.post('/api/chat', protect, async (req, res) => {
     const { prompt } = req.body;
     const mode = req.user.isPremium ? 'Premium' : 'Free'; 
     
     if (!GEMINI_API_KEY) {
-        return res.status(500).json({ error: "GEMINI_API_KEY tidak ditemukan di Vercel Environment Variables." });
+        return res.status(500).json({ error: "GEMINI_API_KEY tidak ditemukan." });
     }
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
+    // Konfigurasi Safety Settings
     let safetySettings = [];
     if (mode === 'Premium') {
         // ALPHA-AI MODE: MATIKAN SEMUA SENSOR (BLOCK_NONE)
@@ -112,22 +126,33 @@ app.post('/api/chat', protect, async (req, res) => {
         ];
     } 
 
+    const requestBody = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { safetySettings: safetySettings }
+    };
+
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash", 
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            config: { safetySettings: safetySettings }
-        });
+        const geminiResponse = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            requestBody
+        );
         
-        res.json({ text: response.text });
+        // Cek apakah ada respons yang valid
+        const responseText = geminiResponse.data.candidates 
+                             ? geminiResponse.data.candidates[0].content.parts[0].text
+                             : "Gagal mendapatkan respons AI.";
+
+        res.json({ text: responseText });
 
     } catch (error) {
-        console.error("Gemini API Error:", error);
-        res.status(500).json({ error: "Gagal memproses AI. Cek log server Vercel." });
+        console.error("Gemini API Error (Axios):", error.response ? error.response.data : error.message);
+        res.status(500).json({ error: "Gagal memproses AI. Cek log server Vercel untuk error Axios." });
     }
 });
 
+
 // --- ENDPOINT MIDTRANS STATUS UPDATE (DUMMY/TO DO: IMPLEMENTASI SIGNATURE) ---
+// Note: Perlu implementasi pengecekan signature Midtrans untuk security
 app.post('/api/midtrans-status', async (req, res) => {
     try {
         const notification = req.body;
@@ -152,6 +177,12 @@ app.post('/api/midtrans-status', async (req, res) => {
 });
 
 
-app.listen(port, () => {
-    console.log(`Server OMEGA berjalan di port ${port}`);
-});
+// Export app untuk Vercel Serverless Function
+module.exports = app;
+
+// Server lokal (Hanya untuk testing lokal, Vercel akan mengabaikan ini)
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => {
+        console.log(`Server OMEGA berjalan di port ${port}`);
+    });
+}
