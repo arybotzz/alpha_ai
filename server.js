@@ -125,14 +125,11 @@ app.post('/api/chat', protect, async (req, res) => {
     // 2. Susun Body Request yang BENAR (contents dan config di level yang sama)
     const requestBody = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { 
-            safetySettings: safetySettings 
-        } 
     };
 
     try {
         const geminiResponse = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
             requestBody
         );
         
