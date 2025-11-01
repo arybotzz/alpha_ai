@@ -1,4 +1,4 @@
-// app.js - VERSI FINAL DENGAN LOGOUT CONFIRM, LOGIN FIX, DAN WELCOME MESSAGE
+// app.js - VERSI FINAL DENGAN FIX LOGOUT, WELCOME MESSAGE, DAN HISTORY REFRESH
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMEN HTML ---
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     };
 
-    // --- FUNGSI INTERFACE (DIPERBAIKI UNTUK WELCOME MESSAGE) ---
+    // --- FUNGSI INTERFACE ---
 
     const renderWelcomeMessage = (isPremium) => {
         messagesContainer.innerHTML = ''; // Bersihkan kontainer
@@ -78,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
         authContainer.style.display = 'none'; // Sembunyikan Auth
         chatArea.style.display = 'flex'; // Tampilkan Chat
         
-        // Atur tampilan sidebar berdasarkan ukuran layar (Responsive Fix)
         if (window.innerWidth <= 768) {
             sidebar.classList.remove('open'); 
             headerMenuButton.style.display = 'block'; 
@@ -92,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
         premiumStatus.textContent = isPremium ? 'Status: Premium (Full Power)' : 'Status: Free (Limitasi Aktif)';
         loadChatHistory();
 
-        // Tampilkan pesan selamat datang hanya jika tidak ada chat history yang dimuat
         if (shouldRenderWelcome) {
             renderWelcomeMessage(isPremium);
         }
@@ -175,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkAuthStatus = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
-            showAuthInterface(); // Tampilkan Login
+            showAuthInterface(); 
             return;
         }
 
@@ -188,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Token tidak valid, silakan login ulang.");
             localStorage.removeItem('token');
-            showAuthInterface(); // Tampilkan Login jika token kadaluarsa
+            showAuthInterface(); 
         }
     };
 
@@ -259,7 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderMessage({ role: 'model', text: aiResponse });
 
-            loadChatHistory();
+            // Panggil loadChatHistory untuk memastikan riwayat baru muncul
+            loadChatHistory(); 
 
         } catch (error) {
             messagesContainer.removeChild(messagesContainer.lastElementChild); 
@@ -268,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // 3. AUTH LISTENERS (DIPERBAIKI UNTUK WELCOME MESSAGE)
+    // 3. AUTH LISTENERS
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = e.target['register-username'].value;
@@ -277,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.post('/api/auth/register', { username, password });
             localStorage.setItem('token', response.data.token);
-            // Tampilkan chat interface DAN render welcome message
             showChatInterface(response.data.isPremium, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Gagal register');
@@ -292,7 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.post('/api/auth/login', { username, password });
             localStorage.setItem('token', response.data.token);
-             // Tampilkan chat interface DAN render welcome message
             showChatInterface(response.data.isPremium, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Login gagal. Cek username/password.');
@@ -321,6 +318,23 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMessages = [];
         messagesContainer.innerHTML = '';
         messageInput.value = '';
+        
+        // KRITIS: Cek status premium untuk menampilkan welcome message yang benar
+        const token = localStorage.getItem('token');
+        if (token) {
+             axios.get('/api/auth/status', { headers: { Authorization: `Bearer ${token}` } })
+                .then(response => {
+                    renderWelcomeMessage(response.data.isPremium);
+                    loadChatHistory(); // Muat ulang history
+                })
+                .catch(() => {
+                    renderWelcomeMessage(false); 
+                    loadChatHistory(); 
+                });
+        } else {
+             renderWelcomeMessage(false);
+        }
+        
         Array.from(historyList.children).forEach(li => li.classList.remove('active'));
     });
 

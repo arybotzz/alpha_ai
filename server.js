@@ -156,7 +156,7 @@ app.post('/api/chat', auth, async (req, res) => {
             return res.status(429).send({ error: 'Anda telah mencapai batas 10 pesan harian. Silakan upgrade ke Premium.' });
         }
 
-        // 2. Tentukan Safety Settings (No Sensor HANYA UNTUK PREMIUM)
+        // 2. Tentukan Safety Settings dan System Instruction
         let safetySettings = [];
         let systemInstruction = "Anda adalah Alpha AI, bot yang dikembangkan oleh Omega, ahli coding. Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
 
@@ -192,14 +192,14 @@ app.post('/api/chat', auth, async (req, res) => {
         // 4. Siapkan Request Body ke Gemini API
         const requestBody = {
             contents: contents,
-            // 🚨🚨 PERBAIKAN KRITIS DI SINI 🚨🚨
-            generationConfig: { // Menggantikan 'config'
-                systemInstruction: systemInstruction,
-                // Pastikan temperature lebih rendah untuk hasil yang lebih stabil
+            // FINAL FIX: systemInstruction HARUS di LEVEL ROOT
+            systemInstruction: systemInstruction, 
+            generationConfig: { 
+                // temperature di dalam generationConfig
                 temperature: 0.7 
             },
-            safetySettings: safetySettings // Dipindahkan ke level root
-            // 🚨🚨 END PERBAIKAN KRITIS 🚨🚨
+            // safetySettings HARUS di LEVEL ROOT
+            safetySettings: safetySettings 
         };
 
         // 5. Panggil Gemini API (FIX: Menggunakan gemini-2.5-flash)
@@ -250,7 +250,7 @@ app.post('/api/chat', auth, async (req, res) => {
 
     } catch (error) {
         console.error('Gemini API Error (Axios):', error.response ? error.response.data : error.message);
-        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error.';
+        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Cek server log Gemini API untuk detail.';
         res.status(500).send({ error: errorMessage });
     }
 });
