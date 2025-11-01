@@ -1,4 +1,4 @@
-// server.js - FULL FIX OMEGA (VERSI FINAL TERBAIK)
+// server.js - VERSI FINAL DENGAN HISTORY CHAT DAN PAYLOAD FIX
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -29,13 +29,25 @@ if (MONGODB_URI) {
 }
 
 
-// --- MODEL USER ---
+// --- MODELS ---
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     isPremium: { type: Boolean, default: false },
 });
 const User = mongoose.model('User', UserSchema);
+
+const ChatHistorySchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    title: { type: String, required: true },
+    messages: [{
+        role: { type: String, enum: ['user', 'model'], required: true },
+        text: { type: String, required: true }
+    }],
+    createdAt: { type: Date, default: Date.now }
+});
+const ChatHistory = mongoose.model('ChatHistory', ChatHistorySchema);
+
 
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
@@ -60,7 +72,7 @@ const protect = (req, res, next) => {
 };
 
 
-// --- ENDPOINTS OTENTIKASI ---
+// --- ENDPOINTS OTENTIKASI & STATUS ---
 app.post('/api/auth/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username dan Password harus diisi.' });
@@ -102,9 +114,40 @@ app.get('/api/auth/status', protect, (req, res) => {
 });
 
 
-// --- ENDPOINT CHAT (PAYLOAD FIX) ---
+// --- ENDPOINT RIWAYAT CHAT (BARU) ---
+app.get('/api/history', protect, async (req, res) => {
+    try {
+        // Ambil riwayat chat (hanya ID, Judul, dan Waktu)
+        const history = await ChatHistory.find({ userId: req.user.id })
+            .select('_id title createdAt')
+            .sort({ createdAt: -1 })
+            .limit(20); // Batasi 20 chat terakhir
+
+        res.json(history);
+    } catch (error) {
+        console.error("History Fetch Error:", error.message);
+        res.status(500).json({ error: 'Gagal memuat riwayat chat.' });
+    }
+});
+
+app.get('/api/history/:chatId', protect, async (req, res) => {
+    try {
+        const chat = await ChatHistory.findOne({ _id: req.params.chatId, userId: req.user.id });
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat tidak ditemukan.' });
+        }
+        res.json(chat);
+    } catch (error) {
+        console.error("Single Chat Fetch Error:", error.message);
+        res.status(500).json({ error: 'Gagal memuat chat.' });
+    }
+});
+
+
+// --- ENDPOINT CHAT (PAYLOAD FIX FINAL) ---
 app.post('/api/chat', protect, async (req, res) => {
-    const { prompt } = req.body;
+    const { prompt, messages, chatId } = req.body; // Terima pesan dan chatId yang sudah ada
+    const userId = req.user.id;
     const mode = req.user.isPremium ? 'Premium' : 'Free'; 
     
     if (!GEMINI_API_KEY) {
@@ -122,14 +165,26 @@ app.post('/api/chat', protect, async (req, res) => {
         ];
     } 
 
-    // 2. Susun Body Request yang BENAR (contents dan config di level yang sama)
+    // 2. Susun Payload (GEMINI PRO FIX)
+    // Gunakan 'messages' yang diterima dari frontend (riwayat chat)
+    // NOTE: Gemini API (v1beta) ingin role 'user' dan 'model' bergantian.
+    const contents = [...(messages || []), { role: "user", parts: [{ text: prompt }] }];
+    
+    // FIX FINAL: Kami kirim safetySettings DI LUAR CONFIG dan menggunakan gemini-pro untuk kestabilan payload ini
     const requestBody = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: contents, 
     };
 
+    // Tambahkan safetySettings jika ada
+    if (safetySettings.length > 0) {
+        requestBody.safetySettings = safetySettings;
+    }
+
+
     try {
+        // Menggunakan gemini-pro untuk kestabilan v1beta
         const geminiResponse = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
             requestBody
         );
         
@@ -137,7 +192,28 @@ app.post('/api/chat', protect, async (req, res) => {
                              ? geminiResponse.data.candidates[0].content.parts[0].text
                              : "Gagal mendapatkan respons AI.";
 
-        res.json({ text: responseText });
+        // --- SIMPAN RIWAYAT ---
+        let chat;
+        const userMessage = { role: 'user', text: prompt };
+        const modelMessage = { role: 'model', text: responseText };
+
+        if (chatId) {
+            // Perbarui chat yang sudah ada
+            chat = await ChatHistory.findByIdAndUpdate(chatId, {
+                $push: { messages: { $each: [userMessage, modelMessage] } }
+            }, { new: true });
+        } else {
+            // Buat chat baru dengan judul dari 15 karakter prompt pertama
+            const title = prompt.substring(0, 15) + (prompt.length > 15 ? '...' : '');
+            chat = await ChatHistory.create({
+                userId: userId,
+                title: title,
+                messages: [userMessage, modelMessage]
+            });
+        }
+        // --- END SIMPAN RIWAYAT ---
+
+        res.json({ text: responseText, chatId: chat._id });
 
     } catch (error) {
         console.error("Gemini API Error (Axios):", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
