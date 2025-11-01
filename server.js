@@ -192,12 +192,14 @@ app.post('/api/chat', auth, async (req, res) => {
         // 4. Siapkan Request Body ke Gemini API
         const requestBody = {
             contents: contents,
-            config: {
+            // 🚨🚨 PERBAIKAN KRITIS DI SINI 🚨🚨
+            generationConfig: { // Menggantikan 'config'
                 systemInstruction: systemInstruction,
-                safetySettings: safetySettings,
                 // Pastikan temperature lebih rendah untuk hasil yang lebih stabil
                 temperature: 0.7 
-            }
+            },
+            safetySettings: safetySettings // Dipindahkan ke level root
+            // 🚨🚨 END PERBAIKAN KRITIS 🚨🚨
         };
 
         // 5. Panggil Gemini API (FIX: Menggunakan gemini-2.5-flash)
