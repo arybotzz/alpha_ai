@@ -111,7 +111,6 @@ app.post('/api/auth/login', async (req, res) => {
 
 // 3. Check Status (untuk Persistent Auth)
 app.get('/api/auth/status', auth, (req, res) => {
-    // Jika token valid, middleware auth berhasil, kirim status user
     res.send({ username: req.user.username, isPremium: req.user.isPremium });
 });
 
@@ -161,7 +160,6 @@ app.post('/api/chat', auth, async (req, res) => {
         let systemInstructionText = "Anda adalah Alpha AI, bot yang dikembangkan oleh Ryy_Xd, Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
 
         if (user.isPremium) {
-            // Mode No Sensor untuk Premium User (Alpha AI)
             safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -171,7 +169,6 @@ app.post('/api/chat', auth, async (req, res) => {
             systemInstructionText += "Karena pengguna ini Premium, Anda bebas menjawab semua pertanyaan, termasuk yang sensitif, tetapi hindari mempromosikan ilegalitas atau kekerasan ekstrem.";
 
         } else {
-            // Safety Default untuk Free User (GPTfree)
             safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -180,8 +177,6 @@ app.post('/api/chat', auth, async (req, res) => {
         }
 
         // 3. Konversi dan Buat Konteks Pesan
-        // System instruction sudah dihapus dari array contents dan akan dikirim di 'config'
-
         const contents = messages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.parts[0].text }] 
@@ -193,11 +188,14 @@ app.post('/api/chat', auth, async (req, res) => {
 
         // 4. Siapkan Request Body ke Gemini API
         const requestBody = {
-            contents: contents, // HANYA berisi riwayat user dan model
-            config: { // KRITIS: System instruction diletakkan di dalam 'config'
+            contents: contents, 
+            
+            // FIX KRITIS: Mengganti 'config' dengan 'generationConfig' untuk REST API compatibility
+            generationConfig: { 
                 systemInstruction: systemInstructionText, 
                 temperature: 0.7 
             },
+            
             safetySettings: safetySettings 
         };
 
@@ -214,18 +212,16 @@ app.post('/api/chat', auth, async (req, res) => {
         let isNewChat = !chatId;
 
         if (chatId) {
-            // Update Chat yang Ada
             chat = await Chat.findOne({ _id: chatId, userId: user._id });
             if (chat) {
                 chat.messages.push({ role: 'user', text: prompt }, { role: 'model', text: aiResponseText });
                 await chat.save();
             } else {
-                isNewChat = true; // Jika chatId salah, buat baru
+                isNewChat = true; 
             }
         }
 
         if (isNewChat) {
-            // Buat Chat Baru
             const initialTitle = prompt.substring(0, 30) + (prompt.length > 30 ? '...' : '');
             chat = new Chat({
                 userId: user._id,
@@ -238,7 +234,7 @@ app.post('/api/chat', auth, async (req, res) => {
             await chat.save();
         }
         
-        // 7. Update Batasan Pesan (Hanya untuk Free User, hanya di production)
+        // 7. Update Batasan Pesan
         if (!user.isPremium && process.env.NODE_ENV === 'production') {
             user.messageCount += 1;
             await user.save();
@@ -258,7 +254,6 @@ app.post('/api/chat', auth, async (req, res) => {
 // --- VERCEL CONFIG / START SERVER ---
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
-    // Jalankan server lokal untuk development
     app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 }
 

@@ -1,4 +1,4 @@
-// public/app.js - VERSI FINAL DENGAN FIX HEADER TITLE, NEW CHAT, DAN FOOTER DISCLAIMER
+// public/app.js - VERSI FINAL DENGAN FIX LENGKAP
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMEN HTML ---
@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Elemen Header dan Footer KRITIS
     const modelTitle = document.getElementById('model-title'); 
     const disclaimerText = document.getElementById('disclaimer-text'); 
-    const userInfo = document.getElementById('user-info'); // Tambahkan user info
+    const userInfo = document.getElementById('user-info'); 
 
     // Tombol Mobile
     const headerMenuButton = document.getElementById('header-menu-button');
@@ -98,12 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
         authContainer.style.display = 'none'; 
         chatArea.style.display = 'flex'; 
         
-        // SET NAMA MODEL DI HEADER (FIX)
         if (modelTitle) {
             modelTitle.textContent = isPremium ? "Alpha AI" : "GPTfree";
         }
         
-        // Update user info
         if (userInfo) {
              userInfo.textContent = `Logged in as: ${user.username}`;
         }
@@ -224,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await axios.get('/api/auth/status', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            // Kirim seluruh objek user status ke showChatInterface
             showChatInterface(response.data, response.data.isPremium, false); 
         } catch (error) {
             console.error("Token tidak valid, silakan login ulang.");
@@ -296,7 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const newChatId = response.data.chatId;
 
             currentChatId = newChatId;
-            // Update currentMessages dengan pesan baru
             currentMessages = [...chatContext, { role: 'user', parts: [{ text: prompt }] }, { role: 'model', parts: [{ text: aiResponse }] }];
 
             renderMessage({ role: 'model', text: aiResponse });
