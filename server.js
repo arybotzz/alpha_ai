@@ -152,7 +152,6 @@ app.post('/api/chat', auth, async (req, res) => {
         const user = req.user;
 
         // 1. Cek Batasan Pesan (Jika user Free)
-        // Batasan 10 pesan untuk free user
         if (!user.isPremium && user.messageCount >= 10 && process.env.NODE_ENV === 'production') { 
             return res.status(429).send({ error: 'Anda telah mencapai batas 10 pesan harian. Silakan upgrade ke Premium.' });
         }
@@ -181,27 +180,22 @@ app.post('/api/chat', auth, async (req, res) => {
         }
 
         // 3. Konversi dan Buat Konteks Pesan
-        // System instruction harus menjadi pesan pertama di array contents dengan role 'system'
-        const systemInstructionMessage = {
-            role: 'system',
-            parts: [{ text: systemInstructionText }]
-        };
-        
-        const history = messages.map(msg => ({
+        // System instruction sudah dihapus dari array contents dan akan dikirim di 'config'
+
+        const contents = messages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.parts[0].text }] 
         }));
         
-        const contents = [
-            systemInstructionMessage, 
-            ...history, 
-            { role: 'user', parts: [{ text: prompt }] }
-        ];
+        // Tambahkan prompt user terbaru ke contents
+        contents.push({ role: 'user', parts: [{ text: prompt }] });
+
 
         // 4. Siapkan Request Body ke Gemini API
         const requestBody = {
-            contents: contents, 
-            generationConfig: { 
+            contents: contents, // HANYA berisi riwayat user dan model
+            config: { // KRITIS: System instruction diletakkan di dalam 'config'
+                systemInstruction: systemInstructionText, 
                 temperature: 0.7 
             },
             safetySettings: safetySettings 
