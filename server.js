@@ -151,14 +151,13 @@ app.post('/api/chat', auth, async (req, res) => {
         const user = req.user;
 
         // 1. Cek Batasan Pesan (Jika user Free)
-        // Pastikan ini hanya berjalan di production agar mudah debugging.
         if (!user.isPremium && user.messageCount >= 10 && process.env.NODE_ENV === 'production') { 
             return res.status(429).send({ error: 'Anda telah mencapai batas 10 pesan harian. Silakan upgrade ke Premium.' });
         }
 
         // 2. Tentukan Safety Settings dan System Instruction
         let safetySettings = [];
-        let systemInstructionText = "Anda adalah Alpha AI, bot yang dikembangkan oleh Ryy_Xd, Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
+        let systemInstructionText = "Anda adalah Alpha AI, bot yang dikembangkan oleh Ryy_Xd Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
 
         if (user.isPremium) {
             safetySettings = [
@@ -178,34 +177,35 @@ app.post('/api/chat', auth, async (req, res) => {
         }
 
         // 3. Konversi dan Buat Konteks Pesan
-        // Konteks pesan dari database/frontend:
         const contents = messages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.parts[0].text }] 
         }));
         
-        // 🚨 FIX BRUTAL: Tambahkan System Instruction sebagai pesan pertama dengan role 'system' 🚨
-        const finalContents = [
-            { role: 'system', parts: [{ text: systemInstructionText }] },
-            ...contents,
-        ];
+        // KRITIS: Tentukan prompt yang dikirim
+        let finalPrompt = prompt;
+
+        // 🚨 FIX MUTLAK V10: Jika ini chat baru (contents.length === 0), gabungkan System Instruction ke prompt pertama 🚨
+        if (contents.length === 0) {
+            // Ini akan memastikan instruksi terkirim sebagai bagian dari prompt user pertama
+            finalPrompt = `[SYSTEM INSTRUCTION: ${systemInstructionText}] [USER PROMPT: ${prompt}]`;
+        }
         
-        // Tambahkan prompt user terbaru
-        finalContents.push({ role: 'user', parts: [{ text: prompt }] });
+        // Tambahkan prompt user (yang mungkin sudah digabung dengan system instruction)
+        contents.push({ role: 'user', parts: [{ text: finalPrompt }] });
 
 
         // 4. Siapkan Request Body ke Gemini API
         // KRITIS: HANYA MENYISAKAN CONTENTS, GENERATION CONFIG, DAN SAFETY SETTINGS.
         const requestBody = {
-            contents: finalContents, 
+            contents: contents, // HANYA BERISI role: user/model
             
-            // Generation Config HANYA berisi parameter generasi seperti temperature
             generationConfig: {
                 temperature: 0.7 
             },
             
-            // Safety settings tetap di root
             safetySettings: safetySettings 
+            // TIDAK ADA FIELD 'config', 'systemInstruction', atau 'role: system'
         };
 
         // 5. Panggil Gemini API (Menggunakan gemini-2.5-flash)
@@ -220,9 +220,10 @@ app.post('/api/chat', auth, async (req, res) => {
         let chat;
         let isNewChat = !chatId;
 
-        // Hilangkan pesan 'system' dari histori chat yang disimpan ke DB
+        // Simpan prompt ASLI (tanpa system instruction yang disisipkan) ke database
+        const promptToSave = prompt; 
         const chatMessagesToSave = [
-            { role: 'user', text: prompt },
+            { role: 'user', text: promptToSave },
             { role: 'model', text: aiResponseText }
         ];
 
@@ -247,7 +248,7 @@ app.post('/api/chat', auth, async (req, res) => {
         }
         
         // 7. Update Batasan Pesan
-        if (!user.isPremium && process.env.NODE_ENV === 'production') {
+        if (!user.isPremium && process.env.NODE_ENV !== 'development') {
             user.messageCount += 1;
             await user.save();
         }
@@ -256,9 +257,9 @@ app.post('/api/chat', auth, async (req, res) => {
         res.send({ text: aiResponseText, chatId: chat._id });
 
     } catch (error) {
-        // CEK LOG SERVER INI!!!
+        // CEK LOG SERVER INI!!! Jika masih 400, kemungkinan API Key / Endpoint/ Model yang lo pakai salah
         console.error('Gemini API Error (Axios):', error.response ? error.response.data : error.message);
-        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs, API Key, atau Endpoint.';
+        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs, API Key, atau format pesan.';
         res.status(500).send({ error: errorMessage });
     }
 });
