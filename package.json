@@ -2,7 +2,7 @@
   "name": "alpha-ai-chat",
   "version": "1.0.0",
   "description": "AI Chatbot Project with Gemini and Auth",
-  "main": "server.js",
+  "main": "server.cjs",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
