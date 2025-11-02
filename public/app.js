@@ -1,4 +1,4 @@
-// public/app.js - VERSI FINAL MUTLAK DENGAN USERNAME DAN JALUR API FIXED
+// public/app.js - VERSI FINAL MUTLAK
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMEN HTML ---
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMessages = []; 
     let currentMessageCount = 0; 
     const FREE_LIMIT = 10; 
-    const MIN_LENGTH = 6; // Validasi minimal panjang, SAMA DENGAN SERVER
+    const MIN_LENGTH = 6; 
 
     // --- LIBRARY MARKDOWN ---
     const { marked } = window;
@@ -38,11 +38,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FUNGSI UTILITY ---
     
     const copyToClipboard = (text) => {
-        // ... (fungsi copyToClipboard)
+        // Implementasi copyToClipboard
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Kode berhasil disalin!");
+        }).catch(err => {
+            console.error('Gagal menyalin:', err);
+        });
     };
 
     const renderMessage = (message) => {
-        // ... (fungsi renderMessage)
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', `${message.role}-message`);
         
@@ -99,15 +103,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 modelName = "GPTfree";
                 modeStatus = `Mode No Sensor tersedia. Anda memiliki ${remaining} pesan tersisa hari ini.`;
             } else {
-                modelName = "GPTfree";
                 modelName = "GPTfree (Sensor)";
                 modeStatus = "Mode Sensor Standar aktif (Limit No Sensor Harian sudah habis).";
             }
         }
 
-        // Update Model Title di Header saat New Chat/Welcome
+        const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
         if (modelTitle) {
-             const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
              modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
         }
 
@@ -130,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (userInfo) {
-            // Menggunakan user.username
             userInfo.textContent = `Logged in as: ${user.username || 'N/A'}`; 
         }
         
@@ -278,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
     headerMenuButton.addEventListener('click', () => sidebar.classList.toggle('open'));
     
     messagesContainer.addEventListener('click', (e) => {
-        // ... (Logika copy button)
         if (e.target.classList.contains('copy-button')) {
              const codeContent = decodeURIComponent(e.target.dataset.code);
              copyToClipboard(codeContent);
@@ -289,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.addEventListener('resize', () => {
-        // ... (Logika resize)
         if (window.innerWidth > 768) {
              sidebar.classList.add('open');
              headerMenuButton.style.display = 'none';
@@ -332,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // FIX KRITIS: Endpoint /api/chat
             const response = await axios.post('/api/chat', { 
                 message: prompt, 
-                history: chatContext.slice(0, -1), // Kirim history TANPA pesan user saat ini (akan ditambahkan server)
+                history: chatContext.slice(0, -1), 
                 blockNone: isNoSensorModeActive 
             }, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -347,7 +346,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Tambahkan respons AI ke context (Pesan user sudah ditambahkan di awal)
             currentMessages.push({ role: 'model', text: aiResponse }); 
             
             // FIX KRITIS: Endpoint /api/user/me untuk update status
@@ -369,16 +367,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // loadChatHistory(); 
 
         } catch (error) {
-            // Hapus pesan user yang gagal
             currentMessages.pop(); 
             
             const loadingElement = messagesContainer.lastElementChild;
             if (loadingElement) messagesContainer.removeChild(loadingElement); 
 
-            let errorMessage = error.response?.data?.error || error.response?.data?.error || error.response?.data || 'Koneksi gagal/Server Error.';
+            let errorMessage = error.response?.data?.error || error.response?.data || 'Koneksi gagal/Server Error.';
 
             if (error.response?.status === 403) {
-                 // Error 403 dari server untuk Limit Habis
                  errorMessage = errorMessage.toString();
             }
             
@@ -407,7 +403,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // Endpoint /api/auth/register (sudah benar)
             const response = await axios.post('/api/auth/register', { username, password });
             localStorage.setItem('token', response.data.token);
             const userUsername = response.data.user.username; 
@@ -438,7 +433,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     document.getElementById('switch-auth').addEventListener('click', () => {
-        // ... (Logika switch auth)
         const isLogin = loginForm.classList.contains('hidden');
         document.getElementById('auth-title').textContent = isLogin ? 'LOGIN' : 'REGISTER';
         loginForm.classList.toggle('hidden');
@@ -447,7 +441,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     logoutButton.addEventListener('click', () => {
-        // ... (Logika logout)
         const isConfirmed = confirm('Apakah Anda yakin ingin keluar dari sesi Alpha AI?');
         if (isConfirmed) {
             localStorage.removeItem('token');
@@ -475,7 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentMessageCount = chatCount;
                 })
                 .catch(() => {
-                    // Jika token invalid saat New Chat
                     if (modelTitle) modelTitle.textContent = "GPTfree (Sensor)";
                     updateFooterDisclaimer(false, FREE_LIMIT); 
                     renderWelcomeMessage(false, FREE_LIMIT);
@@ -490,14 +482,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     waButton.addEventListener('click', () => {
-        // ... (Logika WA button)
         const waNumber = '6285762008398';
         const message = encodeURIComponent("Halo Bro saya mau request update atau ada keluhan terkait Alpha AI.");
         window.open(`https://wa.me/${waNumber}?text=${message}`, '_blank');
     });
 
     upgradeButton.addEventListener('click', () => {
-        // ... (Logika upgrade button)
         alert('Fitur upgrade akan terhubung ke Midtrans.');
     });
 
