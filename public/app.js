@@ -1,4 +1,4 @@
-// public/app.js - VERSI FINAL DENGAN FIX LENGKAP
+// public/app.js - VERSI FINAL DENGAN FIX LOGIC LIMIT DAN STATUS MODE
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMEN HTML ---
@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Status Chat
     let currentChatId = null;
     let currentMessages = []; 
+    let currentMessageCount = 0; // Untuk menyimpan hitungan pesan user
+    const FREE_LIMIT = 10; // Harus sama dengan di server.js
 
     // --- LIBRARY MARKDOWN ---
     const { marked } = window;
@@ -69,45 +71,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FUNGSI INTERFACE ---
 
-    const updateFooterDisclaimer = (isPremium) => {
+    const updateFooterDisclaimer = (isPremium, messageCount) => {
         if (!disclaimerText) return;
         
         if (isPremium) {
             disclaimerText.textContent = "Alpha AI: Mode Premium Aktif. Walaupun bebas, selalu verifikasi informasi sensitif.";
             disclaimerText.style.color = 'rgb(56, 189, 248)'; 
         } else {
-            disclaimerText.textContent = "GPTfree dapat melakukan kesalahan. Periksa ulang fakta penting. Batasan pesan aktif.";
-            disclaimerText.style.color = '#ff6347'; 
+            if (messageCount < FREE_LIMIT) {
+                const remaining = FREE_LIMIT - messageCount;
+                disclaimerText.textContent = `GPTfree: Mode NO SENSOR aktif. Sisa ${remaining} pesan harian.`;
+                disclaimerText.style.color = '#38bdf8'; // Biru Muda untuk No Sensor
+            } else {
+                disclaimerText.textContent = `GPTfree: Mode SENSOR AKTIF (Limit No Sensor Habis: ${FREE_LIMIT}/${FREE_LIMIT}). Upgrade Premium.`;
+                disclaimerText.style.color = '#ff6347'; // Merah untuk Sensor Aktif
+            }
         }
     };
     
-    const renderWelcomeMessage = (isPremium) => {
+    const renderWelcomeMessage = (isPremium, messageCount) => {
         messagesContainer.innerHTML = ''; 
-        const modelName = isPremium ? "Alpha AI" : "GPTfree";
-        const mode = isPremium 
-            ? "Mode No Sensor telah aktif. Tanyakan apapun, kodenya bersih!"
-            : "Anda menggunakan versi gratis (Safety Default Aktif).";
+        
+        let modelName, modeStatus;
 
-        const welcomeText = `**Selamat datang di ${modelName}!** ${mode}`;
+        if (isPremium) {
+            modelName = "Alpha AI";
+            modeStatus = "Mode Premium No Sensor telah aktif. Tanyakan apapun, kodenya bersih!";
+        } else {
+             if (messageCount < FREE_LIMIT) {
+                const remaining = FREE_LIMIT - messageCount;
+                modelName = "GPTfree";
+                modeStatus = `Mode No Sensor tersedia. Anda memiliki ${remaining} pesan tersisa hari ini.`;
+            } else {
+                modelName = "GPTfree";
+                modeStatus = "Mode Sensor Standar aktif (Limit No Sensor Harian sudah habis).";
+            }
+        }
+
+        const welcomeText = `**Selamat datang di ${modelName}!** ${modeStatus}`;
 
         renderMessage({ role: 'model', text: welcomeText });
     };
 
 
-    const showChatInterface = (user, isPremium, shouldRenderWelcome = true) => {
+    const showChatInterface = (user, isPremium, messageCount, shouldRenderWelcome = true) => {
         authContainer.style.display = 'none'; 
         chatArea.style.display = 'flex'; 
         
+        currentMessageCount = messageCount; // Set hitungan pesan
+        
+        const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
+
         if (modelTitle) {
-            modelTitle.textContent = isPremium ? "Alpha AI" : "GPTfree";
+            modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
         }
         
         if (userInfo) {
              userInfo.textContent = `Logged in as: ${user.username}`;
         }
         
-        updateFooterDisclaimer(isPremium); 
+        updateFooterDisclaimer(isPremium, messageCount); 
 
+        // Logic Sidebar Mobile
         if (window.innerWidth <= 768) {
             sidebar.classList.remove('open'); 
             headerMenuButton.style.display = 'block'; 
@@ -118,11 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         sidebar.style.display = 'flex';
         
-        premiumStatus.textContent = isPremium ? 'Status: Premium (Full Power)' : 'Status: Free (Limitasi Aktif)';
+        premiumStatus.textContent = isPremium 
+            ? 'Status: Premium (Full Power)' 
+            : `Status: Free (${messageCount}/${FREE_LIMIT} No Sensor)`;
+            
         loadChatHistory();
 
         if (shouldRenderWelcome) {
-            renderWelcomeMessage(isPremium);
+            renderWelcomeMessage(isPremium, messageCount);
         }
     };
 
@@ -134,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentChatId = null;
         currentMessages = [];
         messagesContainer.innerHTML = ''; 
+        currentMessageCount = 0;
         if (modelTitle) {
             modelTitle.textContent = "AI Chat";
         }
@@ -145,13 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    const toggleSidebar = () => {
-        sidebar.classList.toggle('open');
-    };
-    
-
-    // --- FUNGSI DATA ---
-
+    // Fungsi loadChatHistory dan loadChat (Asumsi sama)
+    // --- FUNGSI ASUMSI LOAD CHAT ---
     const loadChatHistory = async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -161,26 +185,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            historyList.innerHTML = ''; 
+            historyList.innerHTML = '';
             response.data.forEach(chat => {
-                const listItem = document.createElement('li');
-                listItem.textContent = chat.title;
-                listItem.dataset.chatId = chat._id;
-                listItem.addEventListener('click', () => {
-                    loadChat(chat._id);
-                    if (window.innerWidth <= 768) {
-                        sidebar.classList.remove('open'); 
-                    }
-                });
-                historyList.appendChild(listItem);
+                const li = document.createElement('li');
+                li.textContent = chat.title;
+                if (chat._id === currentChatId) {
+                    li.classList.add('active');
+                }
+                li.addEventListener('click', () => loadChat(chat._id));
+                historyList.appendChild(li);
             });
-
         } catch (error) {
-            console.error("Gagal memuat riwayat:", error);
+            console.error('Gagal memuat riwayat chat:', error);
+            // Hanya log error, jangan ganggu user
         }
     };
 
     const loadChat = async (chatId) => {
+        if (chatId === currentChatId) return;
+
         const token = localStorage.getItem('token');
         if (!token) return;
 
@@ -189,27 +212,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            const chat = response.data;
-            currentChatId = chat._id;
-            
-            // Konversi format pesan dari database ke format yang digunakan untuk konteks
-            currentMessages = chat.messages.map(msg => ({ 
-                role: msg.role === 'user' ? 'user' : 'model', 
-                parts: [{ text: msg.text }] 
-            }));
-
+            currentChatId = chatId;
+            currentMessages = response.data.messages.map(msg => ({ role: msg.role, text: msg.text }));
             messagesContainer.innerHTML = '';
-            // Render pesan menggunakan format database {role, text}
-            chat.messages.forEach(msg => renderMessage(msg));
             
-            Array.from(historyList.children).forEach(li => {
-                li.classList.toggle('active', li.dataset.chatId === chatId);
+            // Reload user status to ensure correct limit count
+            const statusResponse = await axios.get('/api/auth/status', {
+                headers: { Authorization: `Bearer ${token}` }
             });
+            const { isPremium, messageCount } = statusResponse.data;
+            currentMessageCount = messageCount;
+            
+            // Render messages
+            currentMessages.forEach(renderMessage);
+            
+            // Update UI status
+            const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
+            modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
+            updateFooterDisclaimer(isPremium, messageCount);
+            premiumStatus.textContent = isPremium 
+                ? 'Status: Premium (Full Power)' 
+                : `Status: Free (${messageCount}/${FREE_LIMIT} No Sensor)`;
 
+            // Highlight di sidebar
+            Array.from(historyList.children).forEach(li => li.classList.remove('active'));
+            const activeLi = Array.from(historyList.children).find(li => li.textContent === response.data.title);
+            if (activeLi) activeLi.classList.add('active');
+            
         } catch (error) {
-            alert('Gagal memuat chat: ' + error.response?.data?.error || error.message);
+            console.error('Gagal memuat chat:', error);
+            alert('Gagal memuat chat.');
         }
     };
+    // --- END FUNGSI ASUMSI LOAD CHAT ---
 
     const checkAuthStatus = async () => {
         const token = localStorage.getItem('token');
@@ -222,7 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await axios.get('/api/auth/status', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            showChatInterface(response.data, response.data.isPremium, false); 
+            const { username, isPremium, messageCount } = response.data;
+            showChatInterface({ username }, isPremium, messageCount, true); 
         } catch (error) {
             console.error("Token tidak valid, silakan login ulang.");
             localStorage.removeItem('token');
@@ -233,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- EVENT LISTENERS ---
     
-    headerMenuButton.addEventListener('click', toggleSidebar);
+    headerMenuButton.addEventListener('click', () => sidebar.classList.toggle('open'));
     
     messagesContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('copy-button')) {
@@ -255,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
     
     // 2. Chat Submit 
     messageForm.addEventListener('submit', async (e) => {
@@ -272,8 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Ambil konteks pesan yang ada
-        const chatContext = currentMessages.map(msg => ({ role: msg.role, parts: msg.parts }));
+        const chatContext = currentMessages.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
 
         try {
             renderMessage({ role: 'model', text: '...' }); 
@@ -289,14 +325,34 @@ document.addEventListener('DOMContentLoaded', () => {
             
             messagesContainer.removeChild(loadingElement);
             
-            const aiResponse = response.data.text;
-            const newChatId = response.data.chatId;
+            const { text: aiResponse, chatId: newChatId, limitWarning, messageCount, isNoSensorMode, isPremium } = response.data;
 
             currentChatId = newChatId;
-            currentMessages = [...chatContext, { role: 'user', parts: [{ text: prompt }] }, { role: 'model', parts: [{ text: aiResponse }] }];
+            currentMessages = [...chatContext, { role: 'user', text: prompt }, { role: 'model', text: aiResponse }];
+            
+            // 🚨 KRITIS: Update status dan tampilkan peringatan 🚨
+            currentMessageCount = messageCount;
+            
+            // Peringatan Limit
+            if (limitWarning) {
+                // Tampilkan peringatan limit
+                renderMessage({ role: 'model', text: `🚨 **PERINGATAN!** ${limitWarning}` });
+                // Mode otomatis beralih ke sensor
+                modelTitle.textContent = "GPTfree (Sensor)";
+            } else {
+                // Mode sesuai status
+                 modelTitle.textContent = isPremium || currentMessageCount < FREE_LIMIT ? "Alpha AI" : "GPTfree (Sensor)";
+            }
+            
+            updateFooterDisclaimer(isPremium, currentMessageCount); 
+            
+            // Update sidebar status
+            premiumStatus.textContent = isPremium 
+                ? 'Status: Premium (Full Power)' 
+                : `Status: Free (${currentMessageCount}/${FREE_LIMIT} No Sensor)`;
+
 
             renderMessage({ role: 'model', text: aiResponse });
-
             loadChatHistory(); 
 
         } catch (error) {
@@ -315,7 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.post('/api/auth/register', { username, password });
             localStorage.setItem('token', response.data.token);
-            showChatInterface(response.data, response.data.isPremium, true); 
+            const { username: user, isPremium, messageCount } = response.data;
+            showChatInterface({ username: user }, isPremium, messageCount, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Gagal register');
         }
@@ -329,7 +386,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.post('/api/auth/login', { username, password });
             localStorage.setItem('token', response.data.token);
-            showChatInterface(response.data, response.data.isPremium, true); 
+            const { username: user, isPremium, messageCount } = response.data;
+            showChatInterface({ username: user }, isPremium, messageCount, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Login gagal. Cek username/password.');
         }
@@ -362,22 +420,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (token) {
              axios.get('/api/auth/status', { headers: { Authorization: `Bearer ${token}` } })
                 .then(response => {
-                    const isPremium = response.data.isPremium;
-                    if (modelTitle) modelTitle.textContent = isPremium ? "Alpha AI" : "GPTfree";
-                    updateFooterDisclaimer(isPremium);
-                    renderWelcomeMessage(isPremium);
+                    const { isPremium, messageCount } = response.data;
+                    const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
+                    if (modelTitle) modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
+                    updateFooterDisclaimer(isPremium, messageCount);
+                    renderWelcomeMessage(isPremium, messageCount);
                     loadChatHistory(); 
+                    currentMessageCount = messageCount;
                 })
                 .catch(() => {
-                    if (modelTitle) modelTitle.textContent = "GPTfree";
-                    updateFooterDisclaimer(false);
-                    renderWelcomeMessage(false);
+                    // Fallback jika status gagal dimuat (tetapi token ada)
+                    if (modelTitle) modelTitle.textContent = "GPTfree (Sensor)";
+                    updateFooterDisclaimer(false, FREE_LIMIT); 
+                    renderWelcomeMessage(false, FREE_LIMIT);
                     loadChatHistory(); 
+                    currentMessageCount = FREE_LIMIT;
                 });
         } else {
-             if (modelTitle) modelTitle.textContent = "GPTfree";
-             updateFooterDisclaimer(false);
-             renderWelcomeMessage(false);
+             // Jika tidak ada token (tidak login)
+             if (modelTitle) modelTitle.textContent = "GPTfree (Sensor)";
+             updateFooterDisclaimer(false, FREE_LIMIT);
+             renderWelcomeMessage(false, FREE_LIMIT);
+             currentMessageCount = FREE_LIMIT;
         }
         
         Array.from(historyList.children).forEach(li => li.classList.remove('active'));

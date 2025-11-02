@@ -1,4 +1,4 @@
-// server.js - VERSI FINAL DENGAN FIX MODEL API DAN AUTH LENGKAP
+// server.js - VERSI FINAL DENGAN FIX LOGIC LIMIT MODE FREE DAN SEMUA BUG API
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -42,14 +42,13 @@ const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     isPremium: { type: Boolean, default: false }, 
-    messageCount: { type: Number, default: 0 } 
+    messageCount: { type: Number, default: 0 },
+    lastMessageDate: { type: Date, default: Date.now } // Untuk Reset Harian
 });
 
 const User = mongoose.model('User', UserSchema);
 
-// --- MIDDLEWARE ---
-
-// Middleware untuk melindungi rute dan mendapatkan user dari token
+// Middleware
 const auth = async (req, res, next) => {
     try {
         const token = req.header('Authorization').replace('Bearer ', '');
@@ -62,28 +61,37 @@ const auth = async (req, res, next) => {
 
         req.token = token;
         req.user = user;
+        
+        // --- LOGIC RESET HARIAN ---
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Jika hari ini berbeda dengan lastMessageDate, reset hitungan
+        if (user.lastMessageDate < today) {
+            user.messageCount = 0;
+            user.lastMessageDate = new Date(); // Update tanggal terakhir
+            await user.save();
+        }
+        // --- END LOGIC RESET HARIAN ---
+
         next();
     } catch (e) {
         res.status(401).send({ error: 'Autentikasi gagal.' });
     }
 };
 
-// --- ROUTE AUTHENTIKASI ---
-
-// 1. Register
+// --- ROUTE AUTHENTIKASI & HISTORY ---
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
         if (password.length < 6) {
             return res.status(400).send({ error: 'Password minimal 6 karakter.' });
         }
-
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = new User({ username, password: hashedPassword });
         await user.save();
-
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
-        res.status(201).send({ username: user.username, token, isPremium: user.isPremium });
+        res.status(201).send({ username: user.username, token, isPremium: user.isPremium, messageCount: user.messageCount });
     } catch (error) {
         if (error.code === 11000) {
             return res.status(400).send({ error: 'Username sudah digunakan.' });
@@ -92,7 +100,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// 2. Login
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -103,20 +110,16 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
-        res.send({ username: user.username, token, isPremium: user.isPremium });
+        res.send({ username: user.username, token, isPremium: user.isPremium, messageCount: user.messageCount });
     } catch (error) {
         res.status(500).send({ error: 'Gagal login.' });
     }
 });
 
-// 3. Check Status (untuk Persistent Auth)
 app.get('/api/auth/status', auth, (req, res) => {
-    res.send({ username: req.user.username, isPremium: req.user.isPremium });
+    res.send({ username: req.user.username, isPremium: req.user.isPremium, messageCount: req.user.messageCount });
 });
 
-// --- ROUTE CHAT HISTORY ---
-
-// 1. Dapatkan Semua History Chat
 app.get('/api/history', auth, async (req, res) => {
     try {
         const chats = await Chat.find({ userId: req.user._id }).sort({ createdAt: -1 }).select('title createdAt');
@@ -126,7 +129,6 @@ app.get('/api/history', auth, async (req, res) => {
     }
 });
 
-// 2. Dapatkan Chat Tertentu
 app.get('/api/history/:chatId', auth, async (req, res) => {
     try {
         const chat = await Chat.findOne({ _id: req.params.chatId, userId: req.user._id });
@@ -139,7 +141,6 @@ app.get('/api/history/:chatId', auth, async (req, res) => {
     }
 });
 
-
 // --- ROUTE CHAT GEMINI (INTI APLIKASI) ---
 app.post('/api/chat', auth, async (req, res) => {
     if (!GEMINI_API_KEY) {
@@ -149,17 +150,16 @@ app.post('/api/chat', auth, async (req, res) => {
     try {
         const { prompt, messages, chatId } = req.body;
         const user = req.user;
+        const FREE_LIMIT = 10; // KRITIS: Batas Pesan No Sensor
 
-        // 1. Cek Batasan Pesan (Jika user Free)
-        if (!user.isPremium && user.messageCount >= 10 && process.env.NODE_ENV === 'production') { 
-            return res.status(429).send({ error: 'Anda telah mencapai batas 10 pesan harian. Silakan upgrade ke Premium.' });
-        }
-
-        // 2. Tentukan Safety Settings dan System Instruction
+        // 1. Tentukan Status Mode (No Sensor vs Sensor Aktif)
+        let isNoSensorMode = user.isPremium || user.messageCount < FREE_LIMIT;
+        
         let safetySettings = [];
         let systemInstructionText = "Anda adalah Alpha AI, bot yang dikembangkan oleh Ryy_Xd Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
 
         if (user.isPremium) {
+            // Premium: No Sensor, No Limit
             safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -167,13 +167,22 @@ app.post('/api/chat', auth, async (req, res) => {
                 { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
             ];
             systemInstructionText += "Karena pengguna ini Premium, Anda bebas menjawab semua pertanyaan, termasuk yang sensitif, tetapi hindari mempromosikan ilegalitas atau kekerasan ekstrem.";
-
-        } else {
+        } else if (isNoSensorMode) {
+            // Free, Tapi Belum Habis Limit: No Sensor, Limited
             safetySettings = [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+            ];
+            systemInstructionText += `Anda beroperasi dalam mode gratis NO SENSOR. Anda memiliki ${FREE_LIMIT - user.messageCount} pesan tersisa hari ini.`;
+        } else {
+            // Free, Limit Habis: Sensor Aktif, No Limit (tetap bisa chat, tapi disensor)
+             safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
             ];
-            systemInstructionText += "Anda beroperasi dalam mode gratis dengan safety settings standar aktif. Jaga balasan tetap aman dan etis.";
+            systemInstructionText += "Anda beroperasi dalam mode gratis SENSOR AKTIF (Limit No Sensor Harian sudah habis). Jaga balasan tetap aman dan etis. Untuk No Sensor, silakan upgrade.";
         }
 
         // 3. Konversi dan Buat Konteks Pesan
@@ -182,37 +191,38 @@ app.post('/api/chat', auth, async (req, res) => {
             parts: [{ text: msg.parts[0].text }] 
         }));
         
-        // KRITIS: Tentukan prompt yang dikirim
         let finalPrompt = prompt;
 
-        // 🚨 FIX MUTLAK V10: Jika ini chat baru (contents.length === 0), gabungkan System Instruction ke prompt pertama 🚨
+        // FIX MUTLAK V10: Gabungkan System Instruction ke prompt pertama jika chat baru
         if (contents.length === 0) {
-            // Ini akan memastikan instruksi terkirim sebagai bagian dari prompt user pertama
             finalPrompt = `[SYSTEM INSTRUCTION: ${systemInstructionText}] [USER PROMPT: ${prompt}]`;
         }
         
-        // Tambahkan prompt user (yang mungkin sudah digabung dengan system instruction)
         contents.push({ role: 'user', parts: [{ text: finalPrompt }] });
 
 
         // 4. Siapkan Request Body ke Gemini API
-        // KRITIS: HANYA MENYISAKAN CONTENTS, GENERATION CONFIG, DAN SAFETY SETTINGS.
         const requestBody = {
-            contents: contents, // HANYA BERISI role: user/model
-            
+            contents: contents, 
             generationConfig: {
                 temperature: 0.7 
             },
-            
             safetySettings: safetySettings 
-            // TIDAK ADA FIELD 'config', 'systemInstruction', atau 'role: system'
         };
 
-        // 5. Panggil Gemini API (Menggunakan gemini-2.5-flash)
+        // 5. Panggil Gemini API (Dengan Validasi)
         const geminiResponse = await axios.post(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
             requestBody
         );
+
+        // VALIDASI KRITIS RESPONS
+        if (!geminiResponse.data.candidates || geminiResponse.data.candidates.length === 0) {
+            const rejectionReason = geminiResponse.data.promptFeedback?.blockReason || 'Tidak Diketahui';
+            return res.status(500).send({ 
+                error: `Respons API Kosong. Pesan Anda mungkin diblokir oleh Safety Filter Gemini. Alasan: ${rejectionReason}. Coba prompt lain atau periksa API Key Anda.` 
+            });
+        }
 
         const aiResponseText = geminiResponse.data.candidates[0].content.parts[0].text;
         
@@ -220,7 +230,6 @@ app.post('/api/chat', auth, async (req, res) => {
         let chat;
         let isNewChat = !chatId;
 
-        // Simpan prompt ASLI (tanpa system instruction yang disisipkan) ke database
         const promptToSave = prompt; 
         const chatMessagesToSave = [
             { role: 'user', text: promptToSave },
@@ -248,16 +257,35 @@ app.post('/api/chat', auth, async (req, res) => {
         }
         
         // 7. Update Batasan Pesan
-        if (!user.isPremium && process.env.NODE_ENV !== 'development') {
-            user.messageCount += 1;
-            await user.save();
+        let updatedMessageCount = user.messageCount;
+        let limitWarning = null;
+        
+        if (!user.isPremium) {
+            if (user.messageCount < FREE_LIMIT) {
+                updatedMessageCount += 1;
+                user.messageCount = updatedMessageCount;
+                user.lastMessageDate = new Date(); 
+                await user.save();
+                
+                // Cek jika hitungan BARU mencapai limit
+                if (updatedMessageCount === FREE_LIMIT) {
+                     // *** PESAN FINAL SESUAI PERMINTAAN USER ***
+                     limitWarning = `LIMIT ANDA DI MODE NO SENSOR TELAH HABIS (${FREE_LIMIT}/${FREE_LIMIT}). Chat Anda selanjutnya akan menggunakan mode sensor standar. Silakan berlangganan Premium untuk melanjutkan akses chat bebas.`;
+                }
+            } 
         }
 
-        // 8. Kirim Balasan
-        res.send({ text: aiResponseText, chatId: chat._id });
+        // 8. Kirim Balasan (sertakan limitWarning jika ada)
+        res.send({ 
+            text: aiResponseText, 
+            chatId: chat._id,
+            limitWarning: limitWarning, 
+            messageCount: updatedMessageCount,
+            // Status mode untuk frontend (cek jika mode no sensor masih aktif)
+            isNoSensorMode: isNoSensorMode && updatedMessageCount < FREE_LIMIT 
+        });
 
     } catch (error) {
-        // CEK LOG SERVER INI!!! Jika masih 400, kemungkinan API Key / Endpoint/ Model yang lo pakai salah
         console.error('Gemini API Error (Axios):', error.response ? error.response.data : error.message);
         const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs, API Key, atau format pesan.';
         res.status(500).send({ error: errorMessage });
@@ -266,7 +294,7 @@ app.post('/api/chat', auth, async (req, res) => {
 
 
 // --- VERCEL CONFIG / START SERVER ---
-app.use(express.static('public')); // Serve static files
+app.use(express.static('public')); 
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
