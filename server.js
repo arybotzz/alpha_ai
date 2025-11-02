@@ -37,13 +37,12 @@ const ChatSchema = new mongoose.Schema({
 
 const Chat = mongoose.model('Chat', ChatSchema);
 
-// Skema User
+// Skema User (Hapus lastMessageDate)
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     isPremium: { type: Boolean, default: false }, 
-    messageCount: { type: Number, default: 0 },
-    lastMessageDate: { type: Date, default: Date.now } // Untuk Reset Harian
+    messageCount: { type: Number, default: 0 } // Tetap hitungan pesan total mode No Sensor
 });
 
 const User = mongoose.model('User', UserSchema);
@@ -62,18 +61,8 @@ const auth = async (req, res, next) => {
         req.token = token;
         req.user = user;
         
-        // --- LOGIC RESET HARIAN ---
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // --- LOGIC RESET HARIAN DIHAPUS (Hanya satu kali limit) ---
         
-        // Jika hari ini berbeda dengan lastMessageDate, reset hitungan
-        if (user.lastMessageDate < today) {
-            user.messageCount = 0;
-            user.lastMessageDate = new Date(); // Update tanggal terakhir
-            await user.save();
-        }
-        // --- END LOGIC RESET HARIAN ---
-
         next();
     } catch (e) {
         res.status(401).send({ error: 'Autentikasi gagal.' });
@@ -88,7 +77,8 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).send({ error: 'Password minimal 6 karakter.' });
         }
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = new User({ username, password: hashedPassword });
+        // messageCount default 0, siap menerima 10 jatah No Sensor
+        const user = new User({ username, password: hashedPassword }); 
         await user.save();
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
         res.status(201).send({ username: user.username, token, isPremium: user.isPremium, messageCount: user.messageCount });
@@ -117,6 +107,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.get('/api/auth/status', auth, (req, res) => {
+    // messageCount akan menjadi hitungan total penggunaan limit No Sensor (tidak akan direset)
     res.send({ username: req.user.username, isPremium: req.user.isPremium, messageCount: req.user.messageCount });
 });
 
@@ -150,7 +141,7 @@ app.post('/api/chat', auth, async (req, res) => {
     try {
         const { prompt, messages, chatId } = req.body;
         const user = req.user;
-        const FREE_LIMIT = 10; // KRITIS: Batas Pesan No Sensor
+        const FREE_LIMIT = 10; // KRITIS: Batas Pesan No Sensor (Hanya SEKALI SEUMUR HIDUP AKUN FREE)
 
         // 1. Tentukan Status Mode (No Sensor vs Sensor Aktif)
         let isNoSensorMode = user.isPremium || user.messageCount < FREE_LIMIT;
@@ -175,14 +166,14 @@ app.post('/api/chat', auth, async (req, res) => {
                 { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
                 { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
             ];
-            systemInstructionText += `Anda beroperasi dalam mode gratis NO SENSOR. Anda memiliki ${FREE_LIMIT - user.messageCount} pesan tersisa hari ini.`;
+            systemInstructionText += `Anda beroperasi dalam mode gratis NO SENSOR. Anda memiliki ${FREE_LIMIT - user.messageCount} pesan tersisa dari total jatah No Sensor yang hanya sekali pakai.`;
         } else {
             // Free, Limit Habis: Sensor Aktif, No Limit (tetap bisa chat, tapi disensor)
              safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
             ];
-            systemInstructionText += "Anda beroperasi dalam mode gratis SENSOR AKTIF (Limit No Sensor Harian sudah habis). Jaga balasan tetap aman dan etis. Untuk No Sensor, silakan upgrade.";
+            systemInstructionText += "Anda beroperasi dalam mode gratis SENSOR AKTIF (Jatah No Sensor SEKALI PAKAI sudah habis). Jaga balasan tetap aman dan etis. Untuk No Sensor, silakan upgrade.";
         }
 
         // 3. Konversi dan Buat Konteks Pesan
@@ -256,7 +247,7 @@ app.post('/api/chat', auth, async (req, res) => {
             await chat.save();
         }
         
-        // 7. Update Batasan Pesan
+        // 7. Update Batasan Pesan (messageCount hanya bertambah, tidak pernah di-reset)
         let updatedMessageCount = user.messageCount;
         let limitWarning = null;
         
@@ -264,13 +255,13 @@ app.post('/api/chat', auth, async (req, res) => {
             if (user.messageCount < FREE_LIMIT) {
                 updatedMessageCount += 1;
                 user.messageCount = updatedMessageCount;
-                user.lastMessageDate = new Date(); 
+                // user.lastMessageDate DIHAPUS, sehingga tidak ada reset harian
                 await user.save();
                 
                 // Cek jika hitungan BARU mencapai limit
                 if (updatedMessageCount === FREE_LIMIT) {
                      // *** PESAN FINAL SESUAI PERMINTAAN USER ***
-                     limitWarning = `LIMIT ANDA DI MODE NO SENSOR TELAH HABIS (${FREE_LIMIT}/${FREE_LIMIT}). Chat Anda selanjutnya akan menggunakan mode sensor standar. Silakan berlangganan Premium untuk melanjutkan akses chat bebas.`;
+                     limitWarning = `LIMIT ANDA DI MODE NO SENSOR TELAH HABIS (${FREE_LIMIT}/${FREE_LIMIT}). Chat Anda selanjutnya akan menggunakan mode sensor standar. Mode No Sensor hanya SEKALI PAKAI. Silakan berlangganan Premium untuk melanjutkan akses chat bebas.`;
                 }
             } 
         }
