@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     waButton.addEventListener('click', () => {
         const waNumber = '6285762008398';
-        const message = encodeURIComponent("Halo saya mau request update atau ada keluhan terkait Alpha AI.");
+        const message = encodeURIComponent("Halo Bro saya mau request update atau ada keluhan terkait Alpha AI.");
         window.open(`https://wa.me/${waNumber}?text=${message}`, '_blank');
     });
 

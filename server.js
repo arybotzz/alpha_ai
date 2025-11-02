@@ -9,21 +9,22 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// Ambil variabel lingkungan (KRITIS!)
+// KRITIS: Halaman ini menggunakan environment variable. Pastikan variabel ini diset di Vercel atau file .env lo.
 const MONGODB_URI = process.env.MONGODB_URI;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_kuat_anda_omega'; 
 
 // --- KONEKSI MONGODB ---
+// KRITIS: Jika history hilang, error ada di bagian ini atau MONGODB_URI lo.
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('MongoDB Connected!'))
-    .catch(err => console.error('MongoDB Connection Error:', err));
+    .catch(err => console.error('MongoDB Connection Error:', err)); // CEK LOG SERVER UNTUK ERROR INI!
 
 // --- SKEMA DATABASE ---
 
 // Skema Pesan Chat
 const MessageSchema = new mongoose.Schema({
-    role: { type: String, required: true, enum: ['user', 'model'] }, // Tipe pesan
+    role: { type: String, required: true, enum: ['user', 'model'] }, 
     text: { type: String, required: true }
 }, { _id: false });
 
@@ -41,8 +42,8 @@ const Chat = mongoose.model('Chat', ChatSchema);
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    isPremium: { type: Boolean, default: false }, // Status Premium
-    messageCount: { type: Number, default: 0 } // Batasan Pesan
+    isPremium: { type: Boolean, default: false }, 
+    messageCount: { type: Number, default: 0 } 
 });
 
 const User = mongoose.model('User', UserSchema);
@@ -187,12 +188,17 @@ app.post('/api/chat', auth, async (req, res) => {
 
 
         // 4. Siapkan Request Body ke Gemini API
+        // FIX TERAKHIR: Memisahkan systemInstruction ke 'config' di root body
         const requestBody = {
             contents: contents, 
             
-            // FIX KRITIS: Mengganti 'config' dengan 'generationConfig' untuk REST API compatibility
-            generationConfig: { 
+            // System Instruction dipindah ke 'config' di root body
+            config: { 
                 systemInstruction: systemInstructionText, 
+            },
+
+            // Generation Config HANYA berisi parameter generasi seperti temperature
+            generationConfig: {
                 temperature: 0.7 
             },
             
@@ -214,6 +220,7 @@ app.post('/api/chat', auth, async (req, res) => {
         if (chatId) {
             chat = await Chat.findOne({ _id: chatId, userId: user._id });
             if (chat) {
+                // KRITIS: Simpan pesan ke database
                 chat.messages.push({ role: 'user', text: prompt }, { role: 'model', text: aiResponseText });
                 await chat.save();
             } else {
@@ -231,6 +238,7 @@ app.post('/api/chat', auth, async (req, res) => {
                     { role: 'model', text: aiResponseText }
                 ]
             });
+            // KRITIS: Simpan chat baru ke database
             await chat.save();
         }
         
@@ -244,6 +252,7 @@ app.post('/api/chat', auth, async (req, res) => {
         res.send({ text: aiResponseText, chatId: chat._id });
 
     } catch (error) {
+        // Cek log ini untuk error API/Koneksi
         console.error('Gemini API Error (Axios):', error.response ? error.response.data : error.message);
         const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs atau API Key.';
         res.status(500).send({ error: errorMessage });
@@ -252,6 +261,8 @@ app.post('/api/chat', auth, async (req, res) => {
 
 
 // --- VERCEL CONFIG / START SERVER ---
+app.use(express.static('public')); // Serve static files
+
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
