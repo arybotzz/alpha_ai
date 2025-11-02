@@ -14,7 +14,7 @@ const midtransClient = require('midtrans-client');
 // 🚨 PERHATIAN: Semua variabel ini harus disetel di Vercel Environment Variables
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
-// FIX KRUSIAL: JWT_SECRET wajib ada, hapus default lemah.
+// FIX KRUSIAL: JWT_SECRET wajib ada.
 const JWT_SECRET = process.env.JWT_SECRET; 
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
@@ -61,7 +61,8 @@ mongoose.connect(MONGODB_URI)
     .catch(err => console.error('MongoDB connection error:', err));
 
 const UserSchema = new mongoose.Schema({
-    email: { type: String, required: true, unique: true },
+    // PERUBAHAN KRUSIAL: Menggunakan 'username' sebagai key unik utama
+    username: { type: String, required: true, unique: true }, 
     password: { type: String, required: true },
     isPremium: { type: Boolean, default: false },
     chatCount: { type: Number, default: 0 } 
@@ -71,7 +72,6 @@ const User = mongoose.model('User', UserSchema);
 // Middleware untuk verifikasi JWT
 const auth = async (req, res, next) => {
     try {
-        // FIX KRUSIAL: Pengecekan keberadaan dan format header
         const authHeader = req.header('Authorization');
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             throw new Error('Authorization header missing or invalid format.');
@@ -89,44 +89,49 @@ const auth = async (req, res, next) => {
         req.user = user;
         next();
     } catch (e) {
-        // console.error("Auth Failed:", e.message);
         res.status(401).send({ error: 'Please authenticate.' });
     }
 };
 
 // ======================================================================
-// 🔒 ENDPOINTS AUTENTIKASI
+// 🔒 ENDPOINTS AUTENTIKASI (MENGGUNAKAN USERNAME)
 // ======================================================================
 
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { email, password } = req.body;
-        const user = new User({ email, password: await bcrypt.hash(password, 8) });
+        // MENGAMBIL 'username'
+        const { username, password } = req.body; 
+        const user = new User({ username, password: await bcrypt.hash(password, 8) });
         await user.save();
         
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
-        res.status(201).send({ user: { id: user._id, email: user.email, isPremium: user.isPremium, chatCount: user.chatCount }, token });
+        // MENGIRIM BALIK 'username'
+        res.status(201).send({ user: { id: user._id, username: user.username, isPremium: user.isPremium, chatCount: user.chatCount }, token });
     } catch (error) {
-        res.status(400).send({ error: error.code === 11000 ? 'Email already in use.' : 'Registration failed.' });
+        // PESAN ERROR SESUAI 'Username'
+        res.status(400).send({ error: error.code === 11000 ? 'Username already in use.' : 'Registration failed.' });
     }
 });
 
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const user = await User.findOne({ email: req.body.email });
+        // MENCARI BERDASARKAN 'username'
+        const user = await User.findOne({ username: req.body.username }); 
         if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
             return res.status(400).send({ error: 'Invalid login credentials' });
         }
 
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
-        res.send({ user: { id: user._id, email: user.email, isPremium: user.isPremium, chatCount: user.chatCount }, token });
+        // MENGIRIM BALIK 'username'
+        res.send({ user: { id: user._id, username: user.username, isPremium: user.isPremium, chatCount: user.chatCount }, token });
     } catch (error) {
         res.status(500).send({ error: 'Login failed.' });
     }
 });
 
 app.get('/api/user/me', auth, (req, res) => {
-    res.send({ user: { id: req.user._id, email: req.user.email, isPremium: req.user.isPremium, chatCount: req.user.chatCount } });
+    // MENGIRIM BALIK 'username'
+    res.send({ user: { id: req.user._id, username: req.user.username, isPremium: req.user.isPremium, chatCount: req.user.chatCount } });
 });
 
 // ======================================================================
@@ -211,7 +216,6 @@ app.post('/api/chat', auth, async (req, res) => {
         res.end();
 
     } catch (error) {
-        // console.error("❌ Gemini API Error:", error.message);
         const errorMessage = error.response && error.response.data && error.response.data.error 
             ? JSON.stringify(error.response.data.error, null, 2) 
             : error.message;
@@ -239,8 +243,9 @@ app.post('/api/midtrans/token', auth, async (req, res) => {
             },
             "item_details": item_details,
             "customer_details": {
-                "email": user.email,
-                "first_name": user.email.split('@')[0]
+                // Menggunakan username untuk customer details
+                "email": user.username, 
+                "first_name": user.username
             },
             "credit_card": {
                 "secure": true
@@ -255,7 +260,6 @@ app.post('/api/midtrans/token', auth, async (req, res) => {
         res.json({ token: snapToken, orderId });
 
     } catch (error) {
-        // console.error("Midtrans Token Error:", error);
         res.status(500).json({ error: 'Failed to create payment token.' });
     }
 });
@@ -269,8 +273,6 @@ app.post('/api/midtrans/notification', async (req, res) => {
         let orderId = statusResponse.order_id;
         let transactionStatus = statusResponse.transaction_status;
         let fraudStatus = statusResponse.fraud_status;
-
-        // console.log(`Midtrans Notification Received for Order ID: ${orderId}. Status: ${transactionStatus}`);
         
         const userIdMatch = orderId.match(/PREMIUM-(.*?)-/);
         const userId = userIdMatch ? userIdMatch[1] : null;
@@ -287,20 +289,15 @@ app.post('/api/midtrans/notification', async (req, res) => {
 
         if (transactionStatus == 'capture' || transactionStatus == 'settlement') {
             if (fraudStatus == 'accept') {
-                // UPDATE USER STATUS KE PREMIUM
                 user.isPremium = true;
                 user.chatCount = 0; // Reset chat count
                 await user.save();
-                // console.log(`✅ User ${user.email} (ID: ${user._id}) successfully upgraded to Premium.`);
             }
         } 
-        // else if (transactionStatus == 'pending') { ... } 
-        // else if (transactionStatus == 'deny' || transactionStatus == 'cancel' || transactionStatus == 'expire') { ... }
 
         res.status(200).send('OK');
 
     } catch (error) {
-        // console.error("Midtrans Notification Error:", error);
         res.status(500).send('Internal Server Error');
     }
 });

@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
         if (modelTitle) {
-             modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
+            modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
         }
 
         const welcomeText = `**Selamat datang di ${modelName}!** ${modeStatus}`;
@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (userInfo) {
+            // MENAMPILKAN USERNAME
             userInfo.textContent = `Logged in as: ${user.username || 'N/A'}`; 
         }
         
@@ -262,6 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
+            // Mengambil 'username'
             const { username, isPremium, chatCount } = response.data.user; 
             
             // Auto-Login sukses
@@ -383,10 +385,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // 3. AUTH LISTENERS 
+    // 3. AUTH LISTENERS (MENGGUNAKAN USERNAME)
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        // MENGAMBIL USERNAME
         const username = e.target['register-username'].value.trim(); 
         const password = e.target['register-password'].value.trim();
 
@@ -403,6 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            // MENGIRIM USERNAME
             const response = await axios.post('/api/auth/register', { username, password });
             localStorage.setItem('token', response.data.token);
             const userUsername = response.data.user.username; 
@@ -416,11 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        // MENGAMBIL USERNAME
         const username = e.target['login-username'].value.trim(); 
         const password = e.target['login-password'].value.trim();
 
         try {
-            // FIX KRITIS: Endpoint /api/auth/login
+            // MENGIRIM USERNAME
             const response = await axios.post('/api/auth/login', { username, password }); 
             localStorage.setItem('token', response.data.token);
             const userUsername = response.data.user.username; 
