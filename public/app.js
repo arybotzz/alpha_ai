@@ -368,6 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = e.target['register-username'].value;
         const password = e.target['register-password'].value;
 
+        // 🚨 PENAMBAHAN ALERT KRITIS 🚨
+        const confirmed = confirm("ANDA HARUS MENGINGAT SANDI DAN USERNAME AKUN INI! Kami tidak menyimpan email atau fitur reset password. Apakah Anda ingin melanjutkan pendaftaran?");
+        if (!confirmed) {
+            return;
+        }
+        // 🚨 END PENAMBAHAN ALERT KRITIS 🚨
+
         try {
             const response = await axios.post('/api/auth/register', { username, password });
             localStorage.setItem('token', response.data.token);
@@ -429,7 +436,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentMessageCount = messageCount;
                 })
                 .catch(() => {
-                    // Fallback jika status gagal dimuat (tetapi token ada)
                     if (modelTitle) modelTitle.textContent = "GPTfree (Sensor)";
                     updateFooterDisclaimer(false, FREE_LIMIT); 
                     renderWelcomeMessage(false, FREE_LIMIT);
@@ -437,7 +443,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentMessageCount = FREE_LIMIT;
                 });
         } else {
-             // Jika tidak ada token (tidak login)
              if (modelTitle) modelTitle.textContent = "GPTfree (Sensor)";
              updateFooterDisclaimer(false, FREE_LIMIT);
              renderWelcomeMessage(false, FREE_LIMIT);
