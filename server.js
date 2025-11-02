@@ -15,10 +15,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_kuat_anda_omega'; 
 
 // --- KONEKSI MONGODB ---
-// KRITIS: Jika history hilang, error ada di bagian ini atau MONGODB_URI lo.
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('MongoDB Connected!'))
-    .catch(err => console.error('MongoDB Connection Error:', err)); // CEK LOG SERVER UNTUK ERROR INI!
+    .catch(err => console.error('MongoDB Connection Error:', err));
 
 // --- SKEMA DATABASE ---
 
@@ -152,6 +151,7 @@ app.post('/api/chat', auth, async (req, res) => {
         const user = req.user;
 
         // 1. Cek Batasan Pesan (Jika user Free)
+        // Pastikan ini hanya berjalan di production agar mudah debugging.
         if (!user.isPremium && user.messageCount >= 10 && process.env.NODE_ENV === 'production') { 
             return res.status(429).send({ error: 'Anda telah mencapai batas 10 pesan harian. Silakan upgrade ke Premium.' });
         }
@@ -178,30 +178,33 @@ app.post('/api/chat', auth, async (req, res) => {
         }
 
         // 3. Konversi dan Buat Konteks Pesan
+        // Konteks pesan dari database/frontend:
         const contents = messages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.parts[0].text }] 
         }));
         
-        // Tambahkan prompt user terbaru ke contents
-        contents.push({ role: 'user', parts: [{ text: prompt }] });
+        // 🚨 FIX BRUTAL: Tambahkan System Instruction sebagai pesan pertama dengan role 'system' 🚨
+        const finalContents = [
+            { role: 'system', parts: [{ text: systemInstructionText }] },
+            ...contents,
+        ];
+        
+        // Tambahkan prompt user terbaru
+        finalContents.push({ role: 'user', parts: [{ text: prompt }] });
 
 
         // 4. Siapkan Request Body ke Gemini API
-        // FIX TERAKHIR: Memisahkan systemInstruction ke 'config' di root body
+        // KRITIS: HANYA MENYISAKAN CONTENTS, GENERATION CONFIG, DAN SAFETY SETTINGS.
         const requestBody = {
-            contents: contents, 
+            contents: finalContents, 
             
-            // System Instruction dipindah ke 'config' di root body
-            config: { 
-                systemInstruction: systemInstructionText, 
-            },
-
             // Generation Config HANYA berisi parameter generasi seperti temperature
             generationConfig: {
                 temperature: 0.7 
             },
             
+            // Safety settings tetap di root
             safetySettings: safetySettings 
         };
 
@@ -217,11 +220,16 @@ app.post('/api/chat', auth, async (req, res) => {
         let chat;
         let isNewChat = !chatId;
 
+        // Hilangkan pesan 'system' dari histori chat yang disimpan ke DB
+        const chatMessagesToSave = [
+            { role: 'user', text: prompt },
+            { role: 'model', text: aiResponseText }
+        ];
+
         if (chatId) {
             chat = await Chat.findOne({ _id: chatId, userId: user._id });
             if (chat) {
-                // KRITIS: Simpan pesan ke database
-                chat.messages.push({ role: 'user', text: prompt }, { role: 'model', text: aiResponseText });
+                chat.messages.push(...chatMessagesToSave);
                 await chat.save();
             } else {
                 isNewChat = true; 
@@ -233,12 +241,8 @@ app.post('/api/chat', auth, async (req, res) => {
             chat = new Chat({
                 userId: user._id,
                 title: initialTitle,
-                messages: [
-                    { role: 'user', text: prompt },
-                    { role: 'model', text: aiResponseText }
-                ]
+                messages: chatMessagesToSave
             });
-            // KRITIS: Simpan chat baru ke database
             await chat.save();
         }
         
@@ -252,9 +256,9 @@ app.post('/api/chat', auth, async (req, res) => {
         res.send({ text: aiResponseText, chatId: chat._id });
 
     } catch (error) {
-        // Cek log ini untuk error API/Koneksi
+        // CEK LOG SERVER INI!!!
         console.error('Gemini API Error (Axios):', error.response ? error.response.data : error.message);
-        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs atau API Key.';
+        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs, API Key, atau Endpoint.';
         res.status(500).send({ error: errorMessage });
     }
 });
