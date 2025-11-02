@@ -18,7 +18,7 @@ const midtransClient = require('midtrans-client');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
-const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_kuat_anda'; // GANTI INI!
+const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_kuat_anda'; 
 
 // MIDTRANS CONFIG
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
@@ -57,22 +57,20 @@ app.use(express.json());
 app.use(express.static('public')); 
 
 // ======================================================================
-// 💾 DATABASE & MODELS (BLOK INI SUDAH DIUBAH MENJADI DEBUG FATAL!)
+// 💾 DATABASE & MODELS (Koneksi dengan Debug Fatal)
 // ======================================================================
 
-// **BLOK INI AKAN GAGAL DENGAN CEPAT DAN MENCETAK ALASAN GAGAL KONEKSI DI LOG VERCEL!**
 mongoose.connect(MONGODB_URI, { 
-    serverSelectionTimeoutMS: 5000, // Timeout 5 detik
+    serverSelectionTimeoutMS: 5000, // Timeout 5 detik untuk respon cepat di Vercel
 })
 .then(() => {
     console.log('✅ MongoDB KONEKSI SUKSES DARI VERCEL!');
 })
 .catch(err => {
-    // INI YANG PALING PENTING! ERROR AKAN JELAS DI LOG VERCEL!
+    // Log Error detail untuk debug di Vercel
     console.error('❌ MONGODB KONEKSI GAGAL FATAL! CEK KREDENSIAL DAN IP WHITELIST!');
     console.error(`Error Mongoose: ${err.name}`);
     console.error(`Pesan Error: ${err.message}`);
-    // CETAK BAGIAN AWAL URI (Jika URI tidak ada atau salah)
     console.error(`URI yang dicoba: ${MONGODB_URI ? MONGODB_URI.substring(0, 50) + '...' : 'URI TIDAK ADA'}`);
     
     process.exit(1); 
@@ -107,10 +105,11 @@ const auth = async (req, res, next) => {
 };
 
 // ======================================================================
-// 🔒 ENDPOINT AUTENTIKASI
+// 🔒 ENDPOINT AUTENTIKASI (PATH REGISTRASI DI-FIX MENJADI /api/auth/register)
 // ======================================================================
 
-app.post('/register', async (req, res) => {
+// FIX PATH INI DARI /register MENJADI /api/auth/register
+app.post('/api/auth/register', async (req, res) => {
     try {
         const { email, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 8);
