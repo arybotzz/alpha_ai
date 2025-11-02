@@ -1,4 +1,4 @@
-// app.js - VERSI FINAL DENGAN FIX LOGOUT, WELCOME MESSAGE, DAN HISTORY REFRESH
+// public/app.js - VERSI FINAL DENGAN FIX HEADER TITLE, NEW CHAT, DAN FOOTER DISCLAIMER
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMEN HTML ---
@@ -18,6 +18,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatArea = document.getElementById('chat-area');
     const messageInput = document.getElementById('message-input');
     
+    // Elemen Header dan Footer KRITIS
+    const modelTitle = document.getElementById('model-title'); 
+    const disclaimerText = document.getElementById('disclaimer-text'); 
+    const userInfo = document.getElementById('user-info'); // Tambahkan user info
+
     // Tombol Mobile
     const headerMenuButton = document.getElementById('header-menu-button');
     
@@ -64,20 +69,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FUNGSI INTERFACE ---
 
+    const updateFooterDisclaimer = (isPremium) => {
+        if (!disclaimerText) return;
+        
+        if (isPremium) {
+            disclaimerText.textContent = "Alpha AI: Mode Premium Aktif. Walaupun bebas, selalu verifikasi informasi sensitif.";
+            disclaimerText.style.color = 'rgb(56, 189, 248)'; 
+        } else {
+            disclaimerText.textContent = "GPTfree dapat melakukan kesalahan. Periksa ulang fakta penting. Batasan pesan aktif.";
+            disclaimerText.style.color = '#ff6347'; 
+        }
+    };
+    
     const renderWelcomeMessage = (isPremium) => {
-        messagesContainer.innerHTML = ''; // Bersihkan kontainer
-        const welcomeText = isPremium 
-            ? "**Selamat datang di Alpha AI!** Mode No Sensor telah aktif. Tanyakan apapun, kodenya bersih!"
-            : "**Selamat datang di GPTfree!** Anda menggunakan versi gratis (terdapat limitasi).";
+        messagesContainer.innerHTML = ''; 
+        const modelName = isPremium ? "Alpha AI" : "GPTfree";
+        const mode = isPremium 
+            ? "Mode No Sensor telah aktif. Tanyakan apapun, kodenya bersih!"
+            : "Anda menggunakan versi gratis (Safety Default Aktif).";
+
+        const welcomeText = `**Selamat datang di ${modelName}!** ${mode}`;
 
         renderMessage({ role: 'model', text: welcomeText });
     };
 
 
-    const showChatInterface = (isPremium, shouldRenderWelcome = true) => {
-        authContainer.style.display = 'none'; // Sembunyikan Auth
-        chatArea.style.display = 'flex'; // Tampilkan Chat
+    const showChatInterface = (user, isPremium, shouldRenderWelcome = true) => {
+        authContainer.style.display = 'none'; 
+        chatArea.style.display = 'flex'; 
         
+        // SET NAMA MODEL DI HEADER (FIX)
+        if (modelTitle) {
+            modelTitle.textContent = isPremium ? "Alpha AI" : "GPTfree";
+        }
+        
+        // Update user info
+        if (userInfo) {
+             userInfo.textContent = `Logged in as: ${user.username}`;
+        }
+        
+        updateFooterDisclaimer(isPremium); 
+
         if (window.innerWidth <= 768) {
             sidebar.classList.remove('open'); 
             headerMenuButton.style.display = 'block'; 
@@ -104,6 +136,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentChatId = null;
         currentMessages = [];
         messagesContainer.innerHTML = ''; 
+        if (modelTitle) {
+            modelTitle.textContent = "AI Chat";
+        }
+        if (disclaimerText) {
+            disclaimerText.textContent = ""; 
+        }
+        if (userInfo) {
+             userInfo.textContent = 'Logged in as: N/A';
+        }
     };
     
     const toggleSidebar = () => {
@@ -153,12 +194,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const chat = response.data;
             currentChatId = chat._id;
             
+            // Konversi format pesan dari database ke format yang digunakan untuk konteks
             currentMessages = chat.messages.map(msg => ({ 
                 role: msg.role === 'user' ? 'user' : 'model', 
                 parts: [{ text: msg.text }] 
             }));
 
             messagesContainer.innerHTML = '';
+            // Render pesan menggunakan format database {role, text}
             chat.messages.forEach(msg => renderMessage(msg));
             
             Array.from(historyList.children).forEach(li => {
@@ -181,8 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await axios.get('/api/auth/status', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            // HANYA tampilkan chat interface (tanpa render welcome message)
-            showChatInterface(response.data.isPremium, false); 
+            // Kirim seluruh objek user status ke showChatInterface
+            showChatInterface(response.data, response.data.isPremium, false); 
         } catch (error) {
             console.error("Token tidak valid, silakan login ulang.");
             localStorage.removeItem('token');
@@ -192,8 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- EVENT LISTENERS ---
-
-    // 1. Mobile & Copy
+    
     headerMenuButton.addEventListener('click', toggleSidebar);
     
     messagesContainer.addEventListener('click', (e) => {
@@ -216,8 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-
-    // 2. Chat Submit
+    
+    // 2. Chat Submit 
     messageForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const prompt = messageInput.value.trim();
@@ -233,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Ambil konteks pesan yang ada
         const chatContext = currentMessages.map(msg => ({ role: msg.role, parts: msg.parts }));
 
         try {
@@ -253,11 +296,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const newChatId = response.data.chatId;
 
             currentChatId = newChatId;
+            // Update currentMessages dengan pesan baru
             currentMessages = [...chatContext, { role: 'user', parts: [{ text: prompt }] }, { role: 'model', parts: [{ text: aiResponse }] }];
 
             renderMessage({ role: 'model', text: aiResponse });
 
-            // Panggil loadChatHistory untuk memastikan riwayat baru muncul
             loadChatHistory(); 
 
         } catch (error) {
@@ -267,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // 3. AUTH LISTENERS
+    // 3. AUTH LISTENERS 
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = e.target['register-username'].value;
@@ -276,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.post('/api/auth/register', { username, password });
             localStorage.setItem('token', response.data.token);
-            showChatInterface(response.data.isPremium, true); 
+            showChatInterface(response.data, response.data.isPremium, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Gagal register');
         }
@@ -290,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.post('/api/auth/login', { username, password });
             localStorage.setItem('token', response.data.token);
-            showChatInterface(response.data.isPremium, true); 
+            showChatInterface(response.data, response.data.isPremium, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Login gagal. Cek username/password.');
         }
@@ -312,26 +355,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 4. FITUR TAMBAHAN
+    // 4. FITUR TAMBAHAN (New Chat FIX)
     newChatButton.addEventListener('click', () => {
         currentChatId = null;
         currentMessages = [];
         messagesContainer.innerHTML = '';
         messageInput.value = '';
         
-        // KRITIS: Cek status premium untuk menampilkan welcome message yang benar
         const token = localStorage.getItem('token');
         if (token) {
              axios.get('/api/auth/status', { headers: { Authorization: `Bearer ${token}` } })
                 .then(response => {
-                    renderWelcomeMessage(response.data.isPremium);
-                    loadChatHistory(); // Muat ulang history
+                    const isPremium = response.data.isPremium;
+                    if (modelTitle) modelTitle.textContent = isPremium ? "Alpha AI" : "GPTfree";
+                    updateFooterDisclaimer(isPremium);
+                    renderWelcomeMessage(isPremium);
+                    loadChatHistory(); 
                 })
                 .catch(() => {
-                    renderWelcomeMessage(false); 
+                    if (modelTitle) modelTitle.textContent = "GPTfree";
+                    updateFooterDisclaimer(false);
+                    renderWelcomeMessage(false);
                     loadChatHistory(); 
                 });
         } else {
+             if (modelTitle) modelTitle.textContent = "GPTfree";
+             updateFooterDisclaimer(false);
              renderWelcomeMessage(false);
         }
         
@@ -340,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     waButton.addEventListener('click', () => {
         const waNumber = '6285762008398';
-        const message = encodeURIComponent("Halo Omega, saya mau request update atau ada keluhan terkait Alpha AI.");
+        const message = encodeURIComponent("Halo saya mau request update atau ada keluhan terkait Alpha AI.");
         window.open(`https://wa.me/${waNumber}?text=${message}`, '_blank');
     });
 

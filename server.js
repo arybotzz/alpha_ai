@@ -12,7 +12,7 @@ app.use(express.json());
 // Ambil variabel lingkungan (KRITIS!)
 const MONGODB_URI = process.env.MONGODB_URI;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_kuat_anda_omega'; // Ganti di Vercel
+const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_kuat_anda_omega'; 
 
 // --- KONEKSI MONGODB ---
 mongoose.connect(MONGODB_URI)
@@ -83,7 +83,7 @@ app.post('/api/auth/register', async (req, res) => {
         await user.save();
 
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
-        res.status(201).send({ user: user.username, token, isPremium: user.isPremium });
+        res.status(201).send({ username: user.username, token, isPremium: user.isPremium });
     } catch (error) {
         if (error.code === 11000) {
             return res.status(400).send({ error: 'Username sudah digunakan.' });
@@ -103,7 +103,7 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
-        res.send({ user: user.username, token, isPremium: user.isPremium });
+        res.send({ username: user.username, token, isPremium: user.isPremium });
     } catch (error) {
         res.status(500).send({ error: 'Gagal login.' });
     }
@@ -152,57 +152,62 @@ app.post('/api/chat', auth, async (req, res) => {
         const user = req.user;
 
         // 1. Cek Batasan Pesan (Jika user Free)
-        if (!user.isPremium && user.messageCount >= 10) { // Batasan 10 pesan untuk free user
+        // Batasan 10 pesan untuk free user
+        if (!user.isPremium && user.messageCount >= 10 && process.env.NODE_ENV === 'production') { 
             return res.status(429).send({ error: 'Anda telah mencapai batas 10 pesan harian. Silakan upgrade ke Premium.' });
         }
 
         // 2. Tentukan Safety Settings dan System Instruction
         let safetySettings = [];
-        let systemInstruction = "Anda adalah Alpha AI, bot yang dikembangkan oleh Omega, ahli coding. Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
+        let systemInstructionText = "Anda adalah Alpha AI, bot yang dikembangkan oleh Ryy_Xd, Balas dengan singkat, jelas, dan jika relevan, gunakan markdown atau code block. ";
 
         if (user.isPremium) {
-            // Mode No Sensor untuk Premium User
+            // Mode No Sensor untuk Premium User (Alpha AI)
             safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
                 { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
                 { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
             ];
-            systemInstruction += "Karena pengguna ini Premium, Anda bebas menjawab semua pertanyaan, termasuk yang sensitif, tetapi hindari mempromosikan ilegalitas atau kekerasan ekstrem.";
+            systemInstructionText += "Karena pengguna ini Premium, Anda bebas menjawab semua pertanyaan, termasuk yang sensitif, tetapi hindari mempromosikan ilegalitas atau kekerasan ekstrem.";
 
         } else {
-            // Safety Default untuk Free User
+            // Safety Default untuk Free User (GPTfree)
             safetySettings = [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
                 { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
             ];
+            systemInstructionText += "Anda beroperasi dalam mode gratis dengan safety settings standar aktif. Jaga balasan tetap aman dan etis.";
         }
 
         // 3. Konversi dan Buat Konteks Pesan
+        // System instruction harus menjadi pesan pertama di array contents dengan role 'system'
+        const systemInstructionMessage = {
+            role: 'system',
+            parts: [{ text: systemInstructionText }]
+        };
+        
         const history = messages.map(msg => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.parts[0].text }] 
         }));
         
         const contents = [
+            systemInstructionMessage, 
             ...history, 
             { role: 'user', parts: [{ text: prompt }] }
         ];
 
         // 4. Siapkan Request Body ke Gemini API
         const requestBody = {
-            contents: contents,
-            // FINAL FIX: systemInstruction HARUS di LEVEL ROOT
-            systemInstruction: systemInstruction, 
+            contents: contents, 
             generationConfig: { 
-                // temperature di dalam generationConfig
                 temperature: 0.7 
             },
-            // safetySettings HARUS di LEVEL ROOT
             safetySettings: safetySettings 
         };
 
-        // 5. Panggil Gemini API (FIX: Menggunakan gemini-2.5-flash)
+        // 5. Panggil Gemini API (Menggunakan gemini-2.5-flash)
         const geminiResponse = await axios.post(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
             requestBody
@@ -239,8 +244,8 @@ app.post('/api/chat', auth, async (req, res) => {
             await chat.save();
         }
         
-        // 7. Update Batasan Pesan (Hanya untuk Free User)
-        if (!user.isPremium) {
+        // 7. Update Batasan Pesan (Hanya untuk Free User, hanya di production)
+        if (!user.isPremium && process.env.NODE_ENV === 'production') {
             user.messageCount += 1;
             await user.save();
         }
@@ -250,7 +255,7 @@ app.post('/api/chat', auth, async (req, res) => {
 
     } catch (error) {
         console.error('Gemini API Error (Axios):', error.response ? error.response.data : error.message);
-        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Cek server log Gemini API untuk detail.';
+        const errorMessage = error.response?.data?.error?.message || 'Gemini API Error. Periksa logs atau API Key.';
         res.status(500).send({ error: errorMessage });
     }
 });
@@ -259,6 +264,7 @@ app.post('/api/chat', auth, async (req, res) => {
 // --- VERCEL CONFIG / START SERVER ---
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
+    // Jalankan server lokal untuk development
     app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 }
 
