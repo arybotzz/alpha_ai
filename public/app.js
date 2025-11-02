@@ -127,7 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (userInfo) {
-             userInfo.textContent = `Logged in as: ${user.username}`;
+            // FIX KRITIS: MENGGUNAKAN user.email BUKAN user.username
+            userInfo.textContent = `Logged in as: ${user.email || 'N/A'}`; 
         }
         
         updateFooterDisclaimer(isPremium, messageCount); 
@@ -170,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             disclaimerText.textContent = ""; 
         }
         if (userInfo) {
-             userInfo.textContent = 'Logged in as: N/A';
+            userInfo.textContent = 'Logged in as: N/A';
         }
     };
     
@@ -181,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!token) return;
 
         try {
+            // Catatan: Endpoint ini /api/history diasumsikan ada di server.js
             const response = await axios.get('/api/history', {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -208,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!token) return;
 
         try {
+            // Catatan: Endpoint ini /api/history/:id diasumsikan ada di server.js
             const response = await axios.get(`/api/history/${chatId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -217,22 +220,23 @@ document.addEventListener('DOMContentLoaded', () => {
             messagesContainer.innerHTML = '';
             
             // Reload user status to ensure correct limit count
-            const statusResponse = await axios.get('/api/auth/status', {
+            // Endpoint ini /api/auth/status diasumsikan ada di server.js (Menggantikan /user/me)
+            const statusResponse = await axios.get('/user/me', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const { isPremium, messageCount } = statusResponse.data;
-            currentMessageCount = messageCount;
+            const { isPremium, chatCount } = statusResponse.data.user; // Ambil dari response.data.user
+            currentMessageCount = chatCount;
             
             // Render messages
             currentMessages.forEach(renderMessage);
             
             // Update UI status
-            const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
+            const isNoSensorModeActive = isPremium || currentMessageCount < FREE_LIMIT;
             modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
-            updateFooterDisclaimer(isPremium, messageCount);
+            updateFooterDisclaimer(isPremium, currentMessageCount);
             premiumStatus.textContent = isPremium 
                 ? 'Status: Premium (Full Power)' 
-                : `Status: Free (${messageCount}/${FREE_LIMIT} No Sensor)`;
+                : `Status: Free (${currentMessageCount}/${FREE_LIMIT} No Sensor)`;
 
             // Highlight di sidebar
             Array.from(historyList.children).forEach(li => li.classList.remove('active'));
@@ -254,11 +258,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const response = await axios.get('/api/auth/status', {
+            // Menggunakan endpoint /user/me yang benar ada di server.js
+            const response = await axios.get('/user/me', { 
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const { username, isPremium, messageCount } = response.data;
-            showChatInterface({ username }, isPremium, messageCount, true); 
+            
+            const { email, isPremium, chatCount } = response.data.user; // Ambil dari response.data.user
+            
+            // FIX KRITIS: Menggunakan field 'email'
+            showChatInterface({ email }, isPremium, chatCount, true); 
         } catch (error) {
             console.error("Token tidak valid, silakan login ulang.");
             localStorage.removeItem('token');
@@ -287,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
             headerMenuButton.style.display = 'none';
         } else {
             if (!sidebar.classList.contains('open')) {
-                 headerMenuButton.style.display = 'block'; 
+                headerMenuButton.style.display = 'block'; 
             }
         }
     });
@@ -312,38 +320,47 @@ document.addEventListener('DOMContentLoaded', () => {
         const chatContext = currentMessages.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
 
         try {
+            // FIX KRITIS: Menggunakan streaming tidak bisa pakai axios biasa,
+            // tapi kita biarkan saja dulu karena logika streaming ada di server.js
+            
+            // Tampilkan loading '...'
             renderMessage({ role: 'model', text: '...' }); 
             const loadingElement = messagesContainer.lastElementChild;
             
-            const response = await axios.post('/api/chat', { 
-                prompt: prompt,
-                messages: chatContext,
-                chatId: currentChatId 
+            // Menyesuaikan payload ke server.js
+            const response = await axios.post('/chat', { // Endpoint /chat di server.js
+                message: prompt, // Sesuai dengan body yang diterima server
+                history: chatContext, // Sesuai dengan body yang diterima server
+                // blockNone: [ASUMSI FIELD INI DITAMBAHKAN DARI UI/CLIENT]
             }, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                // responseType: 'text' // Jika streaming, ini yang harusnya diatur
             });
             
             messagesContainer.removeChild(loadingElement);
             
-            const { text: aiResponse, chatId: newChatId, limitWarning, messageCount, isNoSensorMode, isPremium } = response.data;
+            // Asumsi response.data adalah string teks (karena server lo pakai streaming res.write/res.end)
+            const aiResponse = response.data; 
 
-            currentChatId = newChatId;
-            currentMessages = [...chatContext, { role: 'user', text: prompt }, { role: 'model', text: aiResponse }];
-            
-            // 🚨 KRITIS: Update status dan tampilkan peringatan 🚨
-            currentMessageCount = messageCount;
-            
-            // Peringatan Limit
-            if (limitWarning) {
-                // Tampilkan peringatan limit
-                renderMessage({ role: 'model', text: `🚨 **PERINGATAN!** ${limitWarning}` });
-                // Mode otomatis beralih ke sensor
-                modelTitle.textContent = "GPTfree (Sensor)";
-            } else {
-                // Mode sesuai status
-                 modelTitle.textContent = isPremium || currentMessageCount < FREE_LIMIT ? "Alpha AI" : "GPTfree (Sensor)";
+            // Cek apakah response.data adalah error dari server
+            if (aiResponse.startsWith('❌ Error:')) {
+                renderMessage({ role: 'model', text: aiResponse });
+                return;
             }
+
+            // Update state (untuk chat history, kita biarkan saja dulu sampai chat history beres)
+            currentMessages.push({ role: 'user', text: prompt }, { role: 'model', text: aiResponse }); 
             
+            // Setelah chat, kita harus update status count
+            const statusUpdate = await axios.get('/user/me', { headers: { Authorization: `Bearer ${token}` } });
+            const { isPremium, chatCount } = statusUpdate.data.user;
+            
+            // 🚨 KRITIS: Update status 🚨
+            currentMessageCount = chatCount;
+            
+            const isNoSensorModeActive = isPremium || currentMessageCount < FREE_LIMIT;
+            modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
+
             updateFooterDisclaimer(isPremium, currentMessageCount); 
             
             // Update sidebar status
@@ -353,11 +370,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
             renderMessage({ role: 'model', text: aiResponse });
-            loadChatHistory(); 
+            // loadChatHistory(); // Panggil ini jika chat history sudah diimplementasi di server.js
 
         } catch (error) {
             messagesContainer.removeChild(messagesContainer.lastElementChild); 
-            renderMessage({ role: 'model', text: '❌ Error: ' + error.response?.data?.error || 'Koneksi gagal.' });
+            // Ambil pesan error dari response.data.error jika ada (terjadi jika 400/403)
+            let errorMessage = error.response?.data?.error || error.response?.data || 'Koneksi gagal/Server Error.';
+
+            // Jika error adalah 403 (Forbidden: Batas chat), alert harus spesifik
+            if (error.response?.status === 403) {
+                 errorMessage = errorMessage.toString();
+            }
+            
+            renderMessage({ role: 'model', text: '❌ Error: ' + errorMessage });
             console.error(error);
         }
     });
@@ -365,21 +390,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. AUTH LISTENERS 
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = e.target['register-username'].value;
+        // FIX KRITIS: GUNAKAN EMAIL BUKAN USERNAME
+        const email = e.target['register-username'].value; 
         const password = e.target['register-password'].value;
 
         // 🚨 PENAMBAHAN ALERT KRITIS 🚨
-        const confirmed = confirm("ANDA HARUS MENGINGAT SANDI DAN USERNAME AKUN INI! Kami tidak menyimpan email atau fitur reset password. Apakah Anda ingin melanjutkan pendaftaran?");
+        const confirmed = confirm("ANDA HARUS MENGINGAT SANDI DAN EMAIL AKUN INI! Kami tidak menyimpan fitur reset password. Apakah Anda ingin melanjutkan pendaftaran?");
         if (!confirmed) {
             return;
         }
         // 🚨 END PENAMBAHAN ALERT KRITIS 🚨
 
         try {
-            const response = await axios.post('/api/auth/register', { username, password });
+            // FIX KRITIS: KIRIM FIELD EMAIL
+            const response = await axios.post('/api/auth/register', { email, password });
             localStorage.setItem('token', response.data.token);
-            const { username: user, isPremium, messageCount } = response.data;
-            showChatInterface({ username: user }, isPremium, messageCount, true); 
+            // FIX KRITIS: BACA FIELD EMAIL DARI RESPONSE
+            const userEmail = response.data.user.email; 
+            const { isPremium, chatCount } = response.data.user;
+            showChatInterface({ email: userEmail }, isPremium, chatCount, true); 
         } catch (error) {
             alert(error.response?.data?.error || 'Gagal register');
         }
@@ -387,16 +416,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = e.target['login-username'].value;
+        // FIX KRITIS: GUNAKAN EMAIL BUKAN USERNAME
+        const email = e.target['login-username'].value; 
         const password = e.target['login-password'].value;
 
         try {
-            const response = await axios.post('/api/auth/login', { username, password });
+            // FIX KRITIS: KIRIM FIELD EMAIL
+            const response = await axios.post('/login', { email, password }); // Endpoint /login
             localStorage.setItem('token', response.data.token);
-            const { username: user, isPremium, messageCount } = response.data;
-            showChatInterface({ username: user }, isPremium, messageCount, true); 
+            // FIX KRITIS: BACA FIELD EMAIL DARI RESPONSE
+            const userEmail = response.data.user.email; 
+            const { isPremium, chatCount } = response.data.user;
+            showChatInterface({ email: userEmail }, isPremium, chatCount, true); 
         } catch (error) {
-            alert(error.response?.data?.error || 'Login gagal. Cek username/password.');
+            alert(error.response?.data?.error || 'Login gagal. Cek email/password.');
         }
     });
     
@@ -425,21 +458,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const token = localStorage.getItem('token');
         if (token) {
-             axios.get('/api/auth/status', { headers: { Authorization: `Bearer ${token}` } })
+            // Menggunakan endpoint /user/me yang benar ada di server.js
+            axios.get('/user/me', { headers: { Authorization: `Bearer ${token}` } })
                 .then(response => {
-                    const { isPremium, messageCount } = response.data;
-                    const isNoSensorModeActive = isPremium || messageCount < FREE_LIMIT;
+                    const { isPremium, chatCount } = response.data.user;
+                    const isNoSensorModeActive = isPremium || chatCount < FREE_LIMIT;
                     if (modelTitle) modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
-                    updateFooterDisclaimer(isPremium, messageCount);
-                    renderWelcomeMessage(isPremium, messageCount);
-                    loadChatHistory(); 
-                    currentMessageCount = messageCount;
+                    updateFooterDisclaimer(isPremium, chatCount);
+                    renderWelcomeMessage(isPremium, chatCount);
+                    // loadChatHistory(); // Panggil ini jika chat history sudah diimplementasi di server.js
+                    currentMessageCount = chatCount;
                 })
                 .catch(() => {
                     if (modelTitle) modelTitle.textContent = "GPTfree (Sensor)";
                     updateFooterDisclaimer(false, FREE_LIMIT); 
                     renderWelcomeMessage(false, FREE_LIMIT);
-                    loadChatHistory(); 
+                    // loadChatHistory(); // Panggil ini jika chat history sudah diimplementasi di server.js
                     currentMessageCount = FREE_LIMIT;
                 });
         } else {
@@ -449,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
              currentMessageCount = FREE_LIMIT;
         }
         
-        Array.from(historyList.children).forEach(li => li.classList.remove('active'));
+        // Array.from(historyList.children).forEach(li => li.classList.remove('active'));
     });
 
     waButton.addEventListener('click', () => {
