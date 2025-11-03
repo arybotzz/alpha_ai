@@ -1,28 +1,24 @@
 {
+  "version": 2,
   "rewrites": [
     {
-      "source": "/register",
-      "destination": "/public/index.html"
-    },
-    {
-      "source": "/login",
-      "destination": "/public/index.html"
-    },
-    {
-      "source": "/chat",
-      "destination": "/public/index.html"
-    },
-    {
-      "source": "/user/me",
-      "destination": "/public/index.html"
-    },
-    {
       "source": "/api/(.*)",
-      "destination": "server.cjs"
+      "destination": "/server.cjs"
     },
     {
       "source": "/(.*)",
-      "destination": "/public/$1"
+      "destination": "/public/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
     }
   ]
 }

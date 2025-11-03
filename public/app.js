@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Render secara bertahap
                 finalMessageElement.innerHTML = marked.parse(fullResponseText);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                messagesContainer.scrollTop = messagesContainer.scrollTop;
             }
 
             // Simpan respons penuh ke currentMessages
