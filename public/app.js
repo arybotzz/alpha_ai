@@ -175,7 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // --- FUNGSI ASUMSI LOAD CHAT (PLACEHOLDER) ---
     // const loadChatHistory = async () => {};
 
     const checkAuthStatus = async () => {
