@@ -5,7 +5,8 @@
   "main": "server.cjs",
   "scripts": {
     "start": "node server.cjs",
-    "dev": "nodemon server.cjs"
+    "dev": "nodemon server.cjs",
+    "build": "echo 'Vercel is building the static assets now...'"
   },
   "dependencies": {
     "@google/genai": "~0.15.0",
