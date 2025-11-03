@@ -4,7 +4,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const path = require('path'); 
-// Hapus: const { GoogleGenAI } = require('@google/genai');
 const midtransClient = require('midtrans-client');
 
 // ======================================================================
@@ -18,9 +17,20 @@ const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true'; 
 
-if (!GEMINI_API_KEY || !MONGODB_URI || !MIDTRANS_SERVER_KEY || !JWT_SECRET) {
-    console.error("FATAL: Environment variables GEMINI_API_KEY, MONGODB_URI, JWT_SECRET, or MIDTRANS_SERVER_KEY are missing.");
-    if (MIDTRANS_IS_PRODUCTION || process.env.NODE_ENV !== 'development') process.exit(1); 
+// 🛑 DEBUG KRUSIAL: Memeriksa apakah kunci API dimuat
+console.log("DEBUG: GEMINI_API_KEY Check:", GEMINI_API_KEY ? "Kunci Ditemukan (Panjang: " + GEMINI_API_KEY.length + ")" : "Kunci TIDAK DITEMUKAN!");
+
+
+// 🛑 PERUBAHAN KRUSIAL: Memaksa exit jika Environment Variables penting hilang
+if (!GEMINI_API_KEY || !MONGODB_URI || !JWT_SECRET) {
+    console.error("FATAL: Environment variables GEMINI_API_KEY, MONGODB_URI, or JWT_SECRET are missing.");
+    // Jika kunci API Gemini hilang, paksa exit untuk menghindari error runtime
+    if (!GEMINI_API_KEY) { 
+        console.error("CRITICAL: GEMINI_API_KEY is missing. Exiting process.");
+        process.exit(1); 
+    }
+    // Jika ada variabel lain yang hilang, paksa exit pada mode produksi
+    if (process.env.NODE_ENV !== 'development') process.exit(1); 
 }
 
 const app = express();
@@ -39,17 +49,24 @@ async function startServer() {
     // 🌐 KONFIGURASI MIDTRANS CLIENT
     // ======================================================================
 
-    let snap = new midtransClient.Snap({
-        isProduction: MIDTRANS_IS_PRODUCTION,
-        serverKey: MIDTRANS_SERVER_KEY,
-        clientKey: MIDTRANS_CLIENT_KEY 
-    });
+    let snap = null;
+    let core = null;
 
-    let core = new midtransClient.CoreApi({
-        isProduction: MIDTRANS_IS_PRODUCTION,
-        serverKey: MIDTRANS_SERVER_KEY,
-        clientKey: MIDTRANS_CLIENT_KEY 
-    });
+    if (MIDTRANS_SERVER_KEY && MIDTRANS_CLIENT_KEY) {
+        snap = new midtransClient.Snap({
+            isProduction: MIDTRANS_IS_PRODUCTION,
+            serverKey: MIDTRANS_SERVER_KEY,
+            clientKey: MIDTRANS_CLIENT_KEY 
+        });
+
+        core = new midtransClient.CoreApi({
+            isProduction: MIDTRANS_IS_PRODUCTION,
+            serverKey: MIDTRANS_SERVER_KEY,
+            clientKey: MIDTRANS_CLIENT_KEY 
+        });
+    } else {
+        console.warn("WARNING: Midtrans keys missing. Payment endpoints will fail.");
+    }
 
     // ======================================================================
     // 📦 MIDDLEWARE
@@ -66,7 +83,6 @@ async function startServer() {
         .catch(err => console.error('MongoDB connection error:', err));
 
     const UserSchema = new mongoose.Schema({
-        // PERUBAHAN KRUSIAL: Menggunakan 'username'
         username: { type: String, required: true, unique: true }, 
         password: { type: String, required: true },
         isPremium: { type: Boolean, default: false },
@@ -229,6 +245,8 @@ async function startServer() {
 
     // 1. ENDPOINT UNTUK MENDAPATKAN SNAP TOKEN
     app.post('/api/midtrans/token', auth, async (req, res) => {
+        if (!snap) return res.status(503).json({ error: 'Midtrans service not configured.' });
+        
         const user = req.user;
         const { amount, item_details } = req.body;
         
@@ -250,7 +268,7 @@ async function startServer() {
                 },
                 "callbacks": {
                     // PENTING: GANTI [DOMAIN_LIVE_ANDA] DENGAN DOMAIN VERCEL LO!
-                    "finish": `https://[DOMAIN_LIVE_ANDA]/payment-success.html?order_id=${orderId}` 
+                    "finish": `https://${req.headers.host}/payment-success.html?order_id=${orderId}` 
                 }
             };
 
@@ -265,6 +283,8 @@ async function startServer() {
 
     // 2. ENDPOINT UNTUK NOTIFICATION HANDLER (Callback Server-to-Server)
     app.post('/api/midtrans/notification', async (req, res) => {
+        if (!core) return res.status(503).send('Midtrans service not configured.');
+        
         try {
             const statusResponse = await core.transaction.notification(req.body);
             
@@ -302,7 +322,7 @@ async function startServer() {
 
 
     // ======================================================================
-    // 📄 ROUTING HALAMAN STATIS (Kebijakan, Ketentuan, Tentang)
+    // 📄 ROUTING HALAMAN STATIS & CATCH-ALL
     // ======================================================================
 
     app.get('/privacy', (req, res) => {
