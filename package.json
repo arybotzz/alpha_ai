@@ -8,7 +8,7 @@
     "dev": "nodemon server.cjs"
   },
   "dependencies": {
-    "@google/genai": "^0.1.0",
+    "@google/genai": "^0.16.0", 
     "axios": "^1.7.2",
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
