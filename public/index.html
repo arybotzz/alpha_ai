@@ -10,8 +10,8 @@
 </head>
 <body class="bg-gray-900 text-white flex h-screen chat-container"> 
 
-    <aside id="sidebar"> 
-        <div>
+    <aside id="sidebar" class="w-64 p-4 bg-gray-800 flex-col justify-between hidden md:flex"> 
+        <div class="flex flex-col flex-1">
             <h1 class="text-3xl font-bold text-red-500 mb-4">ALPHA AI</h1>
             <button id="new-chat-button" class="w-full py-2 mb-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-200">
                 <i class="fas fa-plus mr-2"></i> Chat Baru
@@ -21,16 +21,16 @@
                 </ul>
         </div>
 
-        <div id="sidebar-footer" class="mt-4">
+        <div id="sidebar-footer" class="mt-4 border-t border-gray-700 pt-4">
             <p id="premium-status" class="text-sm text-gray-400 mb-2 truncate">Status: N/A</p>
-            <button id="upgrade-button" class="py-2 bg-green-600 hover:bg-green-700 rounded-lg transition duration-200">
+            <button id="upgrade-button" class="w-full py-2 mb-2 bg-green-600 hover:bg-green-700 rounded-lg transition duration-200 text-sm font-semibold">
                 <i class="fas fa-rocket mr-2"></i> Upgrade Premium
             </button>
-            <button id="wa-button" class="py-2 bg-green-500 hover:bg-green-600 rounded-lg transition duration-200">
+            <button id="wa-button" class="w-full py-2 mb-2 bg-green-500 hover:bg-green-600 rounded-lg transition duration-200 text-sm font-semibold">
                 <i class="fab fa-whatsapp mr-2"></i> Hubungi WA Admin
             </button>
             <p id="user-info" class="text-sm text-gray-400 mt-3 mb-2 truncate">Logged in as: N/A</p>
-            <button id="logout-button" class="py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-200">
+            <button id="logout-button" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-200 text-sm font-semibold">
                 <i class="fas fa-sign-out-alt mr-2"></i> Logout
             </button>
         </div>
@@ -44,8 +44,8 @@
                 
                 <form id="login-form" class="space-y-4">
                     <div>
-                        <label for="login-username" class="block text-sm font-medium text-gray-400">Username</label>
-                        <input type="text" id="login-username" name="username" required 
+                        <label for="login-email" class="block text-sm font-medium text-gray-400">Email</label>
+                        <input type="email" id="login-email" name="email" required 
                                 class="w-full px-4 py-2 mt-1 bg-gray-700 border border-gray-600 rounded-lg focus:ring-red-500 focus:border-red-500">
                     </div>
                     <div>
@@ -61,8 +61,8 @@
 
                 <form id="register-form" class="space-y-4 hidden">
                     <div>
-                        <label for="register-username" class="block text-sm font-medium text-gray-400">Username</label>
-                        <input type="text" id="register-username" name="username" required 
+                        <label for="register-email" class="block text-sm font-medium text-gray-400">Email</label>
+                        <input type="email" id="register-email" name="email" required 
                                 class="w-full px-4 py-2 mt-1 bg-gray-700 border border-gray-600 rounded-lg focus:ring-red-500 focus:border-red-500">
                     </div>
                     <div>
@@ -88,8 +88,8 @@
         
         <div id="chat-area" class="flex-1 flex flex-col" style="display: none;">
             
-            <header>
-                <button id="header-menu-button" class="text-2xl" style="display: none;">
+            <header class="p-4 bg-gray-800 flex items-center justify-between md:justify-start">
+                <button id="header-menu-button" class="text-2xl mr-4 md:hidden" style="display: none;">
                     <i class="fas fa-bars"></i>
                 </button>
                 <h1 id="model-title" class="text-xl font-bold">AI Chat</h1> 
@@ -99,10 +99,10 @@
                 </div>
             
             <footer id="chat-footer" class="chat-footer">
-                <p id="disclaimer-text" class="disclaimer-text"></p>
+                <p id="disclaimer-text" class="disclaimer-text text-center text-xs p-2 text-gray-400"></p>
             </footer>
 
-            <form id="message-form" class="p-4 flex bg-gray-800">
+            <form id="message-form" class="p-4 flex bg-gray-800 border-t border-gray-700">
                 <input type="text" id="message-input" placeholder="Tanyakan sesuatu..."
                         class="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-red-500">
                 <button type="submit" id="send-button"
@@ -113,6 +113,7 @@
         </div>
 
     </main>
+    
     <script type="text/javascript" src="https://app.sandbox.midtrans.com/snap/snap.js" 
             data-client-key="<GANTI_DENGAN_CLIENT_KEY_MIDTRANS_LO>"></script>
     
