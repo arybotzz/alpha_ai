@@ -18,17 +18,11 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "server.cjs"
     },
     {
       "source": "/(.*)",
       "destination": "/public/$1"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(register|login|chat|user/me|api/.*)",
-      "dest": "server.cjs"
     }
   ]
 }
