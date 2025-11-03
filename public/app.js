@@ -198,8 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // ENDPOINT ALIGNED: /user/me
-            const response = await axios.get('/user/me', { 
+            // ENDPOINT ALIGNED: /api/user/me
+            const response = await axios.get('/api/user/me', { 
                 headers: { Authorization: `Bearer ${token}` }
             });
             
@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const isNoSensorModeActive = currentMessageCount < FREE_LIMIT || premiumStatus.textContent.includes('Premium');
 
-            const response = await fetch('/chat', { // ENDPOINT ALIGNED: /chat
+            const response = await fetch('/api/chat', { // ENDPOINT ALIGNED: /api/chat
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMessages.push({ role: 'model', text: fullResponseText }); 
 
             // Cek status terbaru user untuk update counter/status
-            const statusUpdate = await axios.get('/user/me', { headers: { Authorization: `Bearer ${token}` } }); // ENDPOINT ALIGNED: /user/me
+            const statusUpdate = await axios.get('/api/user/me', { headers: { Authorization: `Bearer ${token}` } }); // ENDPOINT ALIGNED: /api/user/me
             const { isPremium, chatCount } = statusUpdate.data.user;
             
             currentMessageCount = chatCount;
@@ -368,8 +368,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // ENDPOINT ALIGNED: /register
-            const response = await axios.post('/register', { email, password }); 
+            // ENDPOINT ALIGNED: /api/register
+            const response = await axios.post('/api/register', { email, password }); 
             localStorage.setItem('token', response.data.token);
             const userEmail = response.data.user.email; 
             const { isPremium, chatCount } = response.data.user;
@@ -387,8 +387,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = e.target['login-password'].value.trim();
 
         try {
-            // ENDPOINT ALIGNED: /login
-            const response = await axios.post('/login', { email, password }); 
+            // ENDPOINT ALIGNED: /api/login
+            const response = await axios.post('/api/login', { email, password }); 
             localStorage.setItem('token', response.data.token);
             const userEmail = response.data.user.email; 
             const { isPremium, chatCount } = response.data.user;
@@ -424,8 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const token = localStorage.getItem('token');
         if (token) {
-            // ENDPOINT ALIGNED: /user/me
-            axios.get('/user/me', { headers: { Authorization: `Bearer ${token}` } })
+            // ENDPOINT ALIGNED: /api/user/me
+            axios.get('/api/user/me', { headers: { Authorization: `Bearer ${token}` } })
                 .then(response => {
                     const { isPremium, chatCount } = response.data.user;
                     const isNoSensorModeActive = isPremium || chatCount < FREE_LIMIT;
@@ -456,6 +456,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     upgradeButton.addEventListener('click', () => {
         alert('Fitur upgrade akan terhubung ke Midtrans.');
+        // LOGIC MIDTRANS HARUS DI SINI
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert("Harap login terlebih dahulu.");
+            return;
+        }
+
+        const amount = 50000; // Contoh: Rp 50.000
+        const item_details = [{
+            id: 'PREMIUM_SUBS',
+            price: amount,
+            quantity: 1,
+            name: 'Upgrade Alpha AI Premium'
+        }];
+
+        axios.post('/api/midtrans/token', { amount, item_details }, { 
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(response => {
+            if (response.data.token) {
+                // Panggil Midtrans Snap
+                window.snap.pay(response.data.token, {
+                    onSuccess: function(result){
+                        alert("Pembayaran berhasil! Status Premium Anda akan segera diaktifkan.");
+                        // Segera cek status user setelah pembayaran sukses
+                        checkAuthStatus(); 
+                    },
+                    onPending: function(result){
+                        alert("Pembayaran tertunda. Silakan selesaikan pembayaran.");
+                    },
+                    onError: function(result){
+                        alert("Pembayaran gagal. Mohon coba lagi.");
+                    },
+                    onClose: function(){
+                        alert('Anda menutup jendela pembayaran.');
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            console.error("Error creating Midtrans token:", error.response?.data || error);
+            alert("Gagal membuat token pembayaran. Coba lagi.");
+        });
     });
 
     // Inisialisasi: Auto-Login Check

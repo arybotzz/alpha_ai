@@ -1,23 +1,34 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "server.cjs", 
-      "use": "@vercel/node"
+      "source": "/register",
+      "destination": "/public/index.html"
     },
     {
-      "src": "public/**",
-      "use": "@vercel/static"
+      "source": "/login",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/chat",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/user/me",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/public/$1"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "server.cjs" 
-    },
-    {
-      "src": "/(.*)",
-      "dest": "public/$1"
+      "src": "/(register|login|chat|user/me|api/.*)",
+      "dest": "server.cjs"
     }
   ]
 }

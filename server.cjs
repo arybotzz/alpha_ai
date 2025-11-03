@@ -43,7 +43,6 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
     // 💣 FIX FINAL: Import dan Inisialisasi Gemini API secara ASYNC
-    // Ini menjamin Environment Variable Vercel sudah dimuat.
     let GoogleGenAI;
     try {
         const genaiModule = await import('@google/genai');
@@ -124,10 +123,10 @@ async function startServer() {
     };
 
     // ======================================================================
-    // 🔒 ENDPOINTS AUTENTIKASI (FIXED: Hanya /register dan /login)
+    // 🔒 ENDPOINTS AUTENTIKASI (FIXED: Menggunakan /api/ prefix)
     // ======================================================================
 
-    app.post('/register', async (req, res) => {
+    app.post('/api/register', async (req, res) => { // <-- FIXED
         try {
             const { email, password } = req.body;
             if (!email || !password) {
@@ -144,7 +143,7 @@ async function startServer() {
         }
     });
 
-    app.post('/login', async (req, res) => {
+    app.post('/api/login', async (req, res) => { // <-- FIXED
         try {
             const user = await User.findOne({ email: req.body.email });
             if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
@@ -158,16 +157,16 @@ async function startServer() {
         }
     });
 
-    app.get('/user/me', auth, (req, res) => {
-        // FIXED: Endpoint /user/me
+    app.get('/api/user/me', auth, (req, res) => { // <-- FIXED
+        // FIXED: Endpoint /api/user/me
         res.send({ user: { id: req.user._id, email: req.user.email, isPremium: req.user.isPremium, chatCount: req.user.chatCount } });
     });
 
     // ======================================================================
-    // 💬 ENDPOINT CHAT UTAMA (FIXED: Hanya /chat)
+    // 💬 ENDPOINT CHAT UTAMA (FIXED: Menggunakan /api/ prefix)
     // ======================================================================
 
-    app.post('/chat', auth, async (req, res) => {
+    app.post('/api/chat', auth, async (req, res) => { // <-- FIXED
         const { message, history, blockNone } = req.body;
         const user = req.user;
 
@@ -261,11 +260,11 @@ async function startServer() {
     });
 
     // ======================================================================
-    // 🛒 ENDPOINTS MIDTRANS PEMBAYARAN
+    // 🛒 ENDPOINTS MIDTRANS PEMBAYARAN (FIXED: Menggunakan /api/ prefix)
     // ======================================================================
 
     // 1. ENDPOINT UNTUK MENDAPATKAN SNAP TOKEN
-    app.post('/api/midtrans/token', auth, async (req, res) => {
+    app.post('/api/midtrans/token', auth, async (req, res) => { // <-- FIXED
         if (!snap) return res.status(503).json({ error: 'Midtrans service not configured.' });
         
         const user = req.user;
@@ -304,7 +303,7 @@ async function startServer() {
 
 
     // 2. ENDPOINT UNTUK NOTIFICATION HANDLER (Callback Server-to-Server)
-    app.post('/api/midtrans/notification', async (req, res) => {
+    app.post('/api/midtrans/notification', async (req, res) => { // <-- FIXED
         if (!core) return res.status(503).send('Midtrans service not configured.');
         
         try {
