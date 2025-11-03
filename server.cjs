@@ -1,10 +1,11 @@
-// FINAL MUTLAK server.cjs - FIX 404 GET/POST VERCEL
+// FINAL MUTLAK server.cjs - FIX MONGODB & ASYNC MODULE LOAD
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const midtransClient = require('midtrans-client');
+const { Readable } = require('stream');
+const app = express();
 
 // ======================================================================
 // 🔑 ENVIRONMENT VARIABLES & KONFIGURASI
@@ -17,37 +18,32 @@ const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
 const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true'; 
 
-if (!GEMINI_API_KEY || !MONGODB_URI || !MIDTRANS_SERVER_KEY || !JWT_SECRET) {
-    console.error("FATAL: Environment variables are missing.");
-    if (process.env.NODE_ENV !== 'development' || !GEMINI_API_KEY) { 
-        // Menonaktifkan exit(1) di production untuk Vercel agar bisa melanjutkan deployment 
-        // dan Vercel bisa menampilkan error dari Runtime Logs
-        // process.exit(1); 
-    }
-}
-
-const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ======================================================================
-// 🚀 FUNGSI UTAMA START SERVER
+// 🚀 FUNGSI UTAMA START SERVER (ASYNC)
 // ======================================================================
 
 async function startServer() {
     let GoogleGenAI;
+    let midtransClient;
+    let ai;
+    let snap;
+    let core;
+
     try {
+        // Import asinkron untuk menangani konflik module (Vercel Fix)
         const genaiModule = await import('@google/genai');
         GoogleGenAI = genaiModule.GoogleGenAI;
-    } catch (e) {
-        console.error("Failed to import @google/genai:", e);
-        // process.exit(1); // Menonaktifkan exit(1) untuk Vercel
-    }
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); 
+        ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        
+        midtransClient = require('midtrans-client');
 
-    let snap = null;
-    let core = null;
+        if (!GEMINI_API_KEY || !MONGODB_URI || !MIDTRANS_SERVER_KEY || !JWT_SECRET) {
+            console.error("FATAL: Environment variables are missing.");
+        }
 
-    if (MIDTRANS_SERVER_KEY && MIDTRANS_CLIENT_KEY) {
+        // KONFIGURASI MIDTRANS CLIENT
         snap = new midtransClient.Snap({
             isProduction: MIDTRANS_IS_PRODUCTION,
             serverKey: MIDTRANS_SERVER_KEY,
@@ -59,30 +55,34 @@ async function startServer() {
             serverKey: MIDTRANS_SERVER_KEY,
             clientKey: MIDTRANS_CLIENT_KEY 
         });
+
+    } catch (e) {
+        console.error("Failed to initialize AI or Midtrans module:", e);
+        return;
     }
     
     // ======================================================================
     // 📦 MIDDLEWARE
     // ======================================================================
     app.use(express.json());
-    // Di Vercel, kita perlu menyajikan file statis dari folder public/
-    // Karena kita menghapus vercel.json, kita harus mengandalkan setting Vercel,
-    // atau jika itu gagal, kita harus mengaktifkan kembali ini untuk development
-    // app.use(express.static('public')); 
-
+    // app.use(express.static('public')); // Dihapus karena Vercel menghandle file statis
+    
     // ======================================================================
     // 💾 DATABASE & MODELS
     // ======================================================================
-
-    mongoose.connect(MONGODB_URI)
-        .then(() => console.log('MongoDB connected successfully'))
-        .catch(err => console.error('MongoDB connection error:', err));
+    try {
+        await mongoose.connect(MONGODB_URI);
+        console.log('MongoDB connected successfully');
+    } catch (err) {
+        console.error('🚨 MONGODB CONNECTION ERROR: Harap cek Environment Variable MONGODB_URI di Vercel!', err);
+    }
+    
 
     const UserSchema = new mongoose.Schema({
         email: { type: String, required: true, unique: true },
         password: { type: String, required: true },
         isPremium: { type: Boolean, default: false },
-        chatCount: { type: Number, default: 0 }
+        chatCount: { type: Number, default: 0 } 
     });
     const User = mongoose.model('User', UserSchema);
 
@@ -108,21 +108,15 @@ async function startServer() {
             res.status(401).send({ error: 'Please authenticate.' });
         }
     };
-
-    // ======================================================================
-    // 🌐 RUTE PENTING UNTUK VERCEL (FIX 404 GET)
-    // ======================================================================
     
-    // MENANGANI SEMUA RUTE GET API YANG DIBUAT OLEH REFRESH BROWSER (SPA)
-    app.get('/api/register', (req, res) => res.redirect('/')); 
-    app.get('/api/login', (req, res) => res.redirect('/'));
-    app.get('/api/user/me', (req, res) => res.redirect('/'));
-
     // ======================================================================
-    // 🔒 ENDPOINTS AUTENTIKASI (POST)
+    // 🔒 ENDPOINTS AUTENTIKASI (Prefix /api)
     // ======================================================================
 
     app.post('/api/register', async (req, res) => {
+        if (mongoose.connection.readyState !== 1) {
+             return res.status(503).send({ error: 'Database service unavailable. Please check MONGODB_URI and IP Access.' });
+        }
         try {
             const { email, password } = req.body;
             if (!email || !password) {
@@ -135,7 +129,8 @@ async function startServer() {
             const token = jwt.sign({ _id: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
             res.status(201).send({ user: { id: user._id, email: user.email, isPremium: user.isPremium, chatCount: user.chatCount }, token });
         } catch (error) {
-            res.status(400).send({ error: error.code === 11000 ? 'Email already in use.' : 'Registration failed.' });
+            console.error("Register Error:", error);
+            res.status(400).send({ error: error.code === 11000 ? 'Email already in use.' : 'Registration failed. Server error.' });
         }
     });
 
@@ -158,7 +153,7 @@ async function startServer() {
     });
 
     // ======================================================================
-    // 💬 ENDPOINT CHAT UTAMA
+    // 💬 ENDPOINT CHAT UTAMA (Prefix /api)
     // ======================================================================
 
     app.post('/api/chat', auth, async (req, res) => {
@@ -240,12 +235,10 @@ async function startServer() {
     });
 
     // ======================================================================
-    // 🛒 ENDPOINTS MIDTRANS PEMBAYARAN
+    // 🛒 ENDPOINTS MIDTRANS PEMBAYARAN (Prefix /api)
     // ======================================================================
 
     app.post('/api/midtrans/token', auth, async (req, res) => {
-        if (!snap) return res.status(503).json({ error: 'Midtrans service not configured.' });
-        
         const user = req.user;
         const { amount, item_details } = req.body;
         const orderId = `PREMIUM-${user._id}-${Date.now()}`;
@@ -256,20 +249,21 @@ async function startServer() {
                 "item_details": item_details,
                 "customer_details": { "email": user.email, "first_name": user.email.split('@')[0] },
                 "credit_card": { "secure": true },
-                "callbacks": { "finish": `https://${req.headers.host}/payment-success.html?order_id=${orderId}` }
+                // Menggunakan req.headers.host agar Midtrans callback otomatis tahu domain live Vercel
+                "callbacks": { "finish": `https://${req.headers.host}/payment-success.html?order_id=${orderId}` } 
             };
 
             const snapToken = await snap.createTransactionToken(parameter);
             res.json({ token: snapToken, orderId });
 
         } catch (error) {
+            console.error("Midtrans Token Error:", error);
             res.status(500).json({ error: 'Failed to create payment token.' });
         }
     });
 
+
     app.post('/api/midtrans/notification', async (req, res) => {
-        if (!core) return res.status(503).send('Midtrans service not configured.');
-        
         try {
             const statusResponse = await core.transaction.notification(req.body);
             let transactionStatus = statusResponse.transaction_status;
@@ -288,10 +282,12 @@ async function startServer() {
                     user.isPremium = true;
                     user.chatCount = 0;
                     await user.save();
+                    console.log(`✅ User ${user.email} successfully upgraded to Premium.`);
                 }
             } 
             res.status(200).send('OK');
         } catch (error) {
+            console.error("Midtrans Notification Error:", error);
             res.status(500).send('Internal Server Error');
         }
     });
@@ -299,21 +295,17 @@ async function startServer() {
     // ======================================================================
     // 🖥️ SERVER START
     // ======================================================================
-    
-    // Rute utama catch-all untuk Vercel. 
-    // Ini harus DIBIARKAN KOSONG di server.cjs karena Vercel akan melayani /public/index.html
-    // sebagai homepage jika kita set Output Directory ke 'public'.
-    // app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
+        console.log(`Midtrans Mode: ${MIDTRANS_IS_PRODUCTION ? 'Production' : 'Sandbox'}`);
     });
 }
 
+// Panggil fungsi startServer
 startServer().catch(err => {
     console.error("FATAL SERVER SHUTDOWN DUE TO ASYNC ERROR:", err);
-    // process.exit(1); // Menonaktifkan exit(1) untuk Vercel
 });
 
-// Mengekspor app sebagai Serverless Function di Vercel
+// Export app sebagai Serverless Function yang disukai Vercel
 module.exports = app;
