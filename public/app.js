@@ -1,4 +1,4 @@
-// public/app.js - VERSI FINAL MUTLAK
+// public/app.js - VERSI FINAL MUTLAK & SERVER-SIDE ALIGNED
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMEN HTML ---
@@ -38,7 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FUNGSI UTILITY ---
     
     const copyToClipboard = (text) => {
-        // Implementasi copyToClipboard
         navigator.clipboard.writeText(text).then(() => {
             alert("Kode berhasil disalin!");
         }).catch(err => {
@@ -132,8 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (userInfo) {
-            // MENAMPILKAN USERNAME
-            userInfo.textContent = `Logged in as: ${user.username || 'N/A'}`; 
+            // Menggunakan email
+            userInfo.textContent = `Logged in as: ${user.email || 'N/A'}`; 
         }
         
         updateFooterDisclaimer(isPremium, messageCount); 
@@ -153,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? 'Status: Premium (Full Power)' 
             : `Status: Free (${messageCount}/${FREE_LIMIT} No Sensor)`;
             
-        loadChatHistory();
+        loadChatHistory(); // Placeholder
 
         if (shouldRenderWelcome) {
             renderWelcomeMessage(isPremium, messageCount);
@@ -180,73 +179,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // --- FUNGSI ASUMSI LOAD CHAT ---
+    // --- FUNGSI ASUMSI LOAD CHAT (PLACEHOLDER) ---
     const loadChatHistory = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        try {
-            // Catatan: Endpoint ini /api/history diasumsikan ada di server.js
-            const response = await axios.get('/api/history', {
-                 headers: { Authorization: `Bearer ${token}` }
-            });
-
-            historyList.innerHTML = '';
-            response.data.forEach(chat => {
-                 const li = document.createElement('li');
-                 li.textContent = chat.title;
-                 if (chat._id === currentChatId) {
-                     li.classList.add('active');
-                 }
-                 li.addEventListener('click', () => loadChat(chat._id));
-                 historyList.appendChild(li);
-            });
-        } catch (error) {
-             console.error('Gagal memuat riwayat chat:', error);
-        }
+        console.warn("loadChatHistory: Endpoint /api/history belum diimplementasikan di server.");
+        historyList.innerHTML = '<li class="text-gray-400">Riwayat Chat (Fitur Belum Aktif)</li>';
     };
 
     const loadChat = async (chatId) => {
-        if (chatId === currentChatId) return;
-
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        try {
-            // Endpoint /api/history/:id
-            const response = await axios.get(`/api/history/${chatId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            currentChatId = chatId;
-            currentMessages = response.data.messages.map(msg => ({ role: msg.role, text: msg.text }));
-            messagesContainer.innerHTML = '';
-            
-            // FIX KRITIS: Endpoint /api/user/me
-            const statusResponse = await axios.get('/api/user/me', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const { isPremium, chatCount } = statusResponse.data.user; 
-            currentMessageCount = chatCount;
-            
-            currentMessages.forEach(renderMessage);
-            
-            const isNoSensorModeActive = isPremium || currentMessageCount < FREE_LIMIT;
-            modelTitle.textContent = isNoSensorModeActive ? "Alpha AI" : "GPTfree (Sensor)";
-            updateFooterDisclaimer(isPremium, currentMessageCount);
-            premiumStatus.textContent = isPremium 
-                ? 'Status: Premium (Full Power)' 
-                : `Status: Free (${currentMessageCount}/${FREE_LIMIT} No Sensor)`;
-
-            // Highlight di sidebar
-            Array.from(historyList.children).forEach(li => li.classList.remove('active'));
-            const activeLi = Array.from(historyList.children).find(li => li.textContent === response.data.title);
-            if (activeLi) activeLi.classList.add('active');
-            
-        } catch (error) {
-            console.error('Gagal memuat chat:', error);
-            alert('Gagal memuat chat.');
-        }
+        console.warn("loadChat: Endpoint /api/history/:id belum diimplementasikan di server.");
     };
     // --- END FUNGSI ASUMSI LOAD CHAT ---
 
@@ -258,16 +198,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // FIX KRITIS: Menggunakan endpoint /api/user/me
-            const response = await axios.get('/api/user/me', { 
+            // ENDPOINT ALIGNED: /user/me
+            const response = await axios.get('/user/me', { 
                 headers: { Authorization: `Bearer ${token}` }
             });
             
-            // Mengambil 'username'
-            const { username, isPremium, chatCount } = response.data.user; 
+            // Mengambil 'email'
+            const { email, isPremium, chatCount } = response.data.user; 
             
             // Auto-Login sukses
-            showChatInterface({ username }, isPremium, chatCount, true); 
+            showChatInterface({ email }, isPremium, chatCount, true); 
         } catch (error) {
             console.error("Token tidak valid, silakan login ulang.");
             localStorage.removeItem('token');
@@ -309,6 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         messageInput.value = ''; 
         
+        // Buat elemen chat untuk response streaming
+        const tempMessageElement = document.createElement('div');
+        tempMessageElement.classList.add('message', 'model-message', 'loading-stream');
+        messagesContainer.appendChild(tempMessageElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
         renderMessage({ role: 'user', text: prompt });
 
         const token = localStorage.getItem('token');
@@ -324,34 +270,58 @@ document.addEventListener('DOMContentLoaded', () => {
         const chatContext = currentMessages.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
 
         try {
-            renderMessage({ role: 'model', text: '...' }); 
-            const loadingElement = messagesContainer.lastElementChild;
-            
-            // Logika blockNone
             const isNoSensorModeActive = currentMessageCount < FREE_LIMIT || premiumStatus.textContent.includes('Premium');
-            
-            // FIX KRITIS: Endpoint /api/chat
-            const response = await axios.post('/api/chat', { 
-                message: prompt, 
-                history: chatContext.slice(0, -1), 
-                blockNone: isNoSensorModeActive 
-            }, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            
-            messagesContainer.removeChild(loadingElement);
-            
-            const aiResponse = response.data; 
 
-            if (aiResponse.startsWith('❌ Error:')) {
-                renderMessage({ role: 'model', text: aiResponse });
-                return;
+            const response = await fetch('/chat', { // ENDPOINT ALIGNED: /chat
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    message: prompt,
+                    history: chatContext.slice(0, -1),
+                    blockNone: isNoSensorModeActive 
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP error! status: ${response.status}`);
             }
 
-            currentMessages.push({ role: 'model', text: aiResponse }); 
+            // Hapus elemen loading/streaming placeholder
+            messagesContainer.removeChild(tempMessageElement); 
+
+            // Proses Streaming Response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullResponseText = '';
             
-            // FIX KRITIS: Endpoint /api/user/me untuk update status
-            const statusUpdate = await axios.get('/api/user/me', { headers: { Authorization: `Bearer ${token}` } });
+            // Buat elemen baru untuk menampung seluruh respons AI
+            const finalMessageElement = document.createElement('div');
+            finalMessageElement.classList.add('message', 'model-message');
+            messagesContainer.appendChild(finalMessageElement);
+            
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                fullResponseText += chunk;
+                
+                // Render secara bertahap
+                finalMessageElement.innerHTML = marked.parse(fullResponseText);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            // Simpan respons penuh ke currentMessages
+            currentMessages.push({ role: 'model', text: fullResponseText }); 
+
+            // Cek status terbaru user untuk update counter/status
+            const statusUpdate = await axios.get('/user/me', { headers: { Authorization: `Bearer ${token}` } }); // ENDPOINT ALIGNED: /user/me
             const { isPremium, chatCount } = statusUpdate.data.user;
             
             currentMessageCount = chatCount;
@@ -365,53 +335,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? 'Status: Premium (Full Power)' 
                 : `Status: Free (${currentMessageCount}/${FREE_LIMIT} No Sensor)`;
 
-            renderMessage({ role: 'model', text: aiResponse });
-            // loadChatHistory(); 
-
         } catch (error) {
             currentMessages.pop(); 
             
-            const loadingElement = messagesContainer.lastElementChild;
-            if (loadingElement) messagesContainer.removeChild(loadingElement); 
-
-            let errorMessage = error.response?.data?.error || error.response?.data || 'Koneksi gagal/Server Error.';
-
-            if (error.response?.status === 403) {
-                 errorMessage = errorMessage.toString();
+            const lastElement = messagesContainer.lastElementChild;
+            if (lastElement && lastElement.classList.contains('model-message')) {
+                messagesContainer.removeChild(lastElement); 
             }
-            
+
+            let errorMessage = error.message.includes('HTTP error!') ? error.message.replace('HTTP error! status: ', '') : error.message;
+
             renderMessage({ role: 'model', text: '❌ Error: ' + errorMessage });
-            console.error(error);
+            console.error("Chat Error:", error);
         }
     });
     
-    // 3. AUTH LISTENERS (MENGGUNAKAN USERNAME)
+    // 3. AUTH LISTENERS (MENGGUNAKAN EMAIL)
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // MENGAMBIL USERNAME
-        const username = e.target['register-username'].value.trim(); 
+        // MENGAMBIL EMAIL
+        const email = e.target['register-email'].value.trim(); 
         const password = e.target['register-password'].value.trim();
 
-        if (username.length < MIN_LENGTH) {
-            return alert(`Username wajib minimal ${MIN_LENGTH} karakter.`);
-        }
         if (password.length < MIN_LENGTH) {
             return alert(`Password wajib minimal ${MIN_LENGTH} karakter.`);
         }
 
-        const confirmed = confirm("ANDA HARUS MENGINGAT SANDI DAN USERNAME AKUN INI! Kami tidak menyimpan fitur reset password. Apakah Anda ingin melanjutkan pendaftaran?");
+        const confirmed = confirm("ANDA HARUS MENGINGAT SANDI DAN EMAIL AKUN INI! Kami tidak menyimpan fitur reset password. Apakah Anda ingin melanjutkan pendaftaran?");
         if (!confirmed) {
             return;
         }
 
         try {
-            // MENGIRIM USERNAME
-            const response = await axios.post('/api/auth/register', { username, password });
+            // ENDPOINT ALIGNED: /register
+            const response = await axios.post('/register', { email, password }); 
             localStorage.setItem('token', response.data.token);
-            const userUsername = response.data.user.username; 
+            const userEmail = response.data.user.email; 
             const { isPremium, chatCount } = response.data.user;
-            showChatInterface({ username: userUsername }, isPremium, chatCount, true); 
+            showChatInterface({ email: userEmail }, isPremium, chatCount, true); 
         } catch (error) {
             const errorMessage = error.response?.data?.error || error.response?.data;
             alert(errorMessage || 'Gagal register. Server error.');
@@ -420,20 +382,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        // MENGAMBIL USERNAME
-        const username = e.target['login-username'].value.trim(); 
+        // MENGAMBIL EMAIL
+        const email = e.target['login-email'].value.trim(); 
         const password = e.target['login-password'].value.trim();
 
         try {
-            // MENGIRIM USERNAME
-            const response = await axios.post('/api/auth/login', { username, password }); 
+            // ENDPOINT ALIGNED: /login
+            const response = await axios.post('/login', { email, password }); 
             localStorage.setItem('token', response.data.token);
-            const userUsername = response.data.user.username; 
+            const userEmail = response.data.user.email; 
             const { isPremium, chatCount } = response.data.user;
-            showChatInterface({ username: userUsername }, isPremium, chatCount, true); 
+            showChatInterface({ email: userEmail }, isPremium, chatCount, true); 
         } catch (error) {
             const errorMessage = error.response?.data?.error || error.response?.data;
-            alert(errorMessage || 'Login gagal. Cek username/password.');
+            alert(errorMessage || 'Login gagal. Cek email/password.');
         }
     });
     
@@ -462,8 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const token = localStorage.getItem('token');
         if (token) {
-            // FIX KRITIS: Endpoint /api/user/me
-            axios.get('/api/user/me', { headers: { Authorization: `Bearer ${token}` } })
+            // ENDPOINT ALIGNED: /user/me
+            axios.get('/user/me', { headers: { Authorization: `Bearer ${token}` } })
                 .then(response => {
                     const { isPremium, chatCount } = response.data.user;
                     const isNoSensorModeActive = isPremium || chatCount < FREE_LIMIT;
@@ -495,7 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
     upgradeButton.addEventListener('click', () => {
         alert('Fitur upgrade akan terhubung ke Midtrans.');
     });
-
 
     // Inisialisasi: Auto-Login Check
     checkAuthStatus();
