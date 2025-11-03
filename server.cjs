@@ -20,7 +20,9 @@ const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true';
 if (!GEMINI_API_KEY || !MONGODB_URI || !MIDTRANS_SERVER_KEY || !JWT_SECRET) {
     console.error("FATAL: Environment variables are missing.");
     if (process.env.NODE_ENV !== 'development' || !GEMINI_API_KEY) { 
-        process.exit(1); 
+        // Menonaktifkan exit(1) di production untuk Vercel agar bisa melanjutkan deployment 
+        // dan Vercel bisa menampilkan error dari Runtime Logs
+        // process.exit(1); 
     }
 }
 
@@ -38,7 +40,7 @@ async function startServer() {
         GoogleGenAI = genaiModule.GoogleGenAI;
     } catch (e) {
         console.error("Failed to import @google/genai:", e);
-        process.exit(1);
+        // process.exit(1); // Menonaktifkan exit(1) untuk Vercel
     }
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); 
 
@@ -63,7 +65,10 @@ async function startServer() {
     // 📦 MIDDLEWARE
     // ======================================================================
     app.use(express.json());
-    // app.use(express.static('public')); // DINONAKTIFKAN KARENA VERCEL.JSON MENANGANINYA
+    // Di Vercel, kita perlu menyajikan file statis dari folder public/
+    // Karena kita menghapus vercel.json, kita harus mengandalkan setting Vercel,
+    // atau jika itu gagal, kita harus mengaktifkan kembali ini untuk development
+    // app.use(express.static('public')); 
 
     // ======================================================================
     // 💾 DATABASE & MODELS
@@ -294,6 +299,11 @@ async function startServer() {
     // ======================================================================
     // 🖥️ SERVER START
     // ======================================================================
+    
+    // Rute utama catch-all untuk Vercel. 
+    // Ini harus DIBIARKAN KOSONG di server.cjs karena Vercel akan melayani /public/index.html
+    // sebagai homepage jika kita set Output Directory ke 'public'.
+    // app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
@@ -302,5 +312,8 @@ async function startServer() {
 
 startServer().catch(err => {
     console.error("FATAL SERVER SHUTDOWN DUE TO ASYNC ERROR:", err);
-    process.exit(1); 
+    // process.exit(1); // Menonaktifkan exit(1) untuk Vercel
 });
+
+// Mengekspor app sebagai Serverless Function di Vercel
+module.exports = app;
